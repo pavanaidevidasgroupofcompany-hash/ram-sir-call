@@ -126,7 +126,18 @@ function CallsTable({ rows, isMobile, onClient }) {
                 </td>
                 <td className="num mono">{r.duration == null ? "—" : r.duration}</td>
                 <td><span className={"pill " + r.state} title={r.label || undefined}>{r.label || STATE_LABEL[r.state] || r.state}</span></td>
-                <td className="num mono" style={{ fontWeight: r.lateDays ? 700 : 400, color: r.lateDays ? "var(--red)" : "var(--hint)" }}>
+                {/* Days and Late measure to DIFFERENT dates, on purpose. Days
+                    is the real turnaround, start to End. Late is the SLA, and
+                    the SLA judges the FIRST action — postponing inside the
+                    window is acting in time, whatever happens afterwards. On a
+                    call postponed in July and finished in August the two dates
+                    are a month apart, so the cell names both rather than
+                    leaving a 37 beside an 11 looking like one of them is wrong. */}
+                <td className="num mono"
+                    title={r.firstAction
+                      ? `First acted ${dmy(r.firstAction)} · due ${dmy(r.dueDate)}`
+                      : undefined}
+                    style={{ fontWeight: r.lateDays ? 700 : 400, color: r.lateDays ? "var(--red)" : "var(--hint)" }}>
                   {r.lateDays ? r.lateDays : "—"}
                 </td>
                 {/* The second clock. A call answered on time and then left

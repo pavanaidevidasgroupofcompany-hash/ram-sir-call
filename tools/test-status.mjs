@@ -102,5 +102,55 @@ const paused = mockRows.filter((r) => r.subVerdict === "paused");
 t("every paused row carries no start date",
   paused.length > 0 && paused.every((r) => !r.startDate), true);
 
+console.log("\nEnd is the completion, not the first action");
+
+/* The parser sends only `calledDate`, and it is the FIRST action — the first
+   of Completed, postponed, not received. It sends no completion date, so
+   toRows() derives one from the log. That derivation has three rules that are
+   each easy to lose in a refactor, and each wrong in a way that reads as
+   plausible on screen:
+
+     the LAST Completed, not the first   (completed, reopened, completed again)
+     seeded rows skipped                 (a backfill carries the epoch)
+     closedFrom "grid" falls back        (the sheet closed it, nobody logged it)
+
+   Pinned against the mock, which is the only dataset here whose histories are
+   written by hand and so the only one that can exercise all three. */
+const { toRows } = await import("../src/lib/data.js");
+const rows = toRows(mockRows);
+
+/* The invariant that ties the derived date to the parser's own answer: a row
+   has an end date exactly when the parser says the call was resolved. Either
+   direction failing is a real bug — a missing date reads "not completed" on a
+   finished call, a spurious one dates a call that never closed. */
+const disagree = rows
+  .filter((r) => !!r.end !== !!r.resolved)
+  .map((r) => `${r.business} ${r.framework} ${r.attempt} — resolved=${r.resolved} end=${r.end || "(none)"}`);
+t("an end date appears exactly when the parser says resolved", disagree, []);
+if (disagree.length) disagree.forEach((d) => console.log("          " + d));
+
+/* A seeded row carries 1970. If one is ever read as the completion the call
+   dates to the epoch, Days goes enormous and the row sorts to the top. */
+const epoch = rows
+  .filter((r) => r.end && r.end < "2000-01-01")
+  .map((r) => `${r.business} ${r.framework} — end ${r.end}`);
+t("no seeded backfill is read as the completion", epoch, []);
+if (epoch.length) epoch.forEach((e) => console.log("          " + e));
+
+/* THE CASE THIS FIXES. Postponed inside July, finished in August: End must be
+   the completion and Days must follow it, while Late still measures to the
+   first action, because that is what the SLA judges. */
+const nova = rows.find((r) => r.business === "Nova Instruments" && r.framework === "F4");
+t("a postponed-then-finished call ends on the completion",
+  nova && { end: nova.end, firstAction: nova.firstAction, days: nova.duration, late: nova.lateDays },
+  { end: "2026-08-18", firstAction: "2026-07-20", days: 37, late: 11 });
+
+/* The second bug: answered but never finished used to show the postponement
+   date as though the call had ended. */
+const openPostponed = rows.find((r) => r.business === "Alpha Traders" && r.framework === "F2");
+t("answered but unfinished has no end date",
+  openPostponed && { end: openPostponed.end, days: openPostponed.duration },
+  { end: "", days: null });
+
 console.log(failed ? `\n${failed} FAILED\n` : "\nall green\n");
 process.exit(failed ? 1 : 0);

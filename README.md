@@ -71,15 +71,46 @@ Two are easy to confuse, so they are worth stating plainly:
 
 | Column | Means | From |
 |---|---|---|
-| **Days** | how long the call took, start to called | computed from the two dates |
+| **End** | the day the call was **completed** | the last `Completed` in `history` |
+| **Days** | how long the call took, start to **End** | computed from the two dates |
 | **Late** | how far past the deadline it ran | the backend's `lateDays` |
 
 **Both count working days. Sunday is never counted, by either.**
 
-`Days` minus `Late` is normally **1** — the one-day SLA window. It is **2** when
-the call started on a Sunday, because the clock rolls forward to Monday before
-the window opens; the `clockStart` field on every row records that. It is **0**
-when the call was answered on the same day it went pending.
+### Days and Late measure to different dates
+
+Deliberately, and this is the one thing to understand about the table.
+
+The parser sends a single date for the work, `calledDate`, and it is the
+**first action** — the first of *Completed*, *postponed by client*, *call not
+received*. It sends **no completion date at all**. So `End` is derived in
+[`src/lib/data.js`](src/lib/data.js) from the log: the **last** non-seeded
+`Completed` entry, because a call completed, reopened and completed again ended
+on the second one. Seeded rows are skipped — a backfill records that the status
+*was* Completed, never when. Where the sheet closed an attempt nobody logged
+(`closedFrom: "grid"`) there is no history to read, and `calledDate` genuinely
+is the completion, so that is used.
+
+`Days` follows `End`: the real turnaround. `Late` does **not** — the SLA judges
+the *first* action, because postponing inside the window is acting in time
+whatever happens afterwards, so it still measures to `calledDate`. Those two
+dates can be a month apart, so the `Late` cell carries a tooltip naming both:
+*First acted 20-07-2026 · due 07-07-2026*. The CSV export carries the same date
+in its own **First Acted** column.
+
+Nova Instruments F4 is the case that shows it: started 06-07, postponed 20-07,
+finished 18-08. It reads **End 18-08-2026, Days 37, Late 11**.
+
+`Days` minus `Late` is **1** — the one-day SLA window — for the calls that
+finished at the first action, which is most of them. It is **larger** for a
+call postponed or missed and closed later, by exactly the time between the two
+dates. It is **2** when the call started on a Sunday, because the clock rolls
+forward to Monday before the window opens; the `clockStart` field on every row
+records that. It is **0** when the call was answered on the same day it went
+pending.
+
+A call answered but never finished has no end date and reads **not completed**,
+rather than showing the day it was postponed as though it had ended.
 
 Counting calendar days here was wrong in a way that showed on screen: two calls
 ran 68 and 69 days and were both 58 working days late, because the longer one
