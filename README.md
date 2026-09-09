@@ -435,3 +435,28 @@ Both stacked charts and their legends are built from `CHART_SERIES` in
 change in one left the other incrementing keys that no longer existed, and the
 by-function chart read zero without an error. A single list means the data
 builder and the bars cannot disagree about what a series is called.
+
+---
+
+## Deployment
+
+Live at **<https://ram-sir-call.vercel.app>**.
+
+Hosted on Vercel, linked to this GitHub repository. Every push to
+`claude/framework-tracker-deploy-4seo2e` (the repository's default branch, and
+the project's production branch) builds and goes live automatically; pushes to
+any other branch get their own preview URL.
+
+`vercel.json` pins the Vite preset, `npm run build` and `dist/`, and rewrites
+every path to `index.html` — the app navigates in state rather than by URL, so
+this only matters for a deep link or a refresh on a non-root path.
+
+The build needs no environment variables. The n8n webhook lives in
+`src/config.js` and ships in the bundle, exactly as it does locally, so a
+deployment is correct as soon as it builds. Moving to a different n8n instance
+is still the one-line `N8N_HOST` change there, followed by a push.
+
+Because the dashboard is a static bundle calling the webhook from the browser,
+the workflow must stay active and keep sending
+`Access-Control-Allow-Origin: *` — a live page with empty charts and a CORS
+error in the console means the workflow is down, not the deployment.
