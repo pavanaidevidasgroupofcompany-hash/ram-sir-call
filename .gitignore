@@ -1,0 +1,4 @@
+node_modules
+dist
+live.tmp.json
+.vercel

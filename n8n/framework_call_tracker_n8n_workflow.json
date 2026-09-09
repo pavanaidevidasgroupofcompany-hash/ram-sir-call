@@ -1,0 +1,484 @@
+{
+  "name": "Framework Call Tracker",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "framework-tracker/data",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "136af9a0-2c5e-4399-a4aa-fe7d2572dfdc",
+      "name": "Webhook - Data",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        256
+      ],
+      "webhookId": "tracker-data"
+    },
+    {
+      "parameters": {
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/1Cer9SIAzrp0EYOx82w6P71JWOOSF5L76XldzGKfV78M?fields=sheets.properties.title",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "options": {}
+      },
+      "id": "df03f1da-cef9-480c-bd72-359d2f656204",
+      "name": "HTTP - Sheet Tabs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        144,
+        256
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "5BbadQKQl6I0DKSx",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Every tab is fetched; the parser decides which ones are tracker tabs by\n// looking at their header row. Cheaper than a second round-trip to ask.\nconst titles = ($input.first().json.sheets || [])\n  .map(s => s.properties && s.properties.title)\n  .filter(Boolean);\n\nif (!titles.length) {\n  throw new Error('No tabs found. Check the Sheet ID and that the credential can read it.');\n}\n\nconst ranges = titles\n  .map(t => 'ranges=' + encodeURIComponent(\"'\" + t.replace(/'/g, \"''\") + \"'!A1:AZ\"))\n  .join('&');\n\nconst url = 'https://sheets.googleapis.com/v4/spreadsheets/1Cer9SIAzrp0EYOx82w6P71JWOOSF5L76XldzGKfV78M/values:batchGet?'\n  + ranges\n  + '&valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING';\n\nreturn [{ json: { url, titles } }];\n"
+      },
+      "id": "6b0208db-2cfe-4dfc-926a-ac9ea92fcdf0",
+      "name": "Build batchGet URL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        368,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "options": {}
+      },
+      "id": "298132fa-f922-4032-bdbd-1a2d7da1c1dd",
+      "name": "HTTP - Load All Tabs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        592,
+        256
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "5BbadQKQl6I0DKSx",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const SLA_HOURS = 48;\nconst ADVISOR_COL = 1;\nconst BUSINESS_COL = 2;\nconst FIRST_BLOCK = 3;\nconst SEED_YEAR = 1970;\n\nconst GRID_NODE = 'HTTP - Load All Tabs';\nconst LOG_NODE = 'HTTP - Load Log';\n\nconst CALL_OUTCOMES = ['Completed', 'Call postponed by client', 'Call not received'];\nconst AWAITING = 'Response pending';\nconst RUNNING = 'Call pending';\n\nconst NOW = new Date();\n\nconst MONTHS = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };\n\n// Order and counts must stay identical to FRAMEWORK_SETS in the Apps Script,\n// or logged calls will never join to their start dates.\nconst FRAMEWORK_SETS = [\n  { match: /team|people|leadership/i,            count: 4 },\n  { match: /operation|productivity/i,            count: 5 },\n  { match: /market\\s*research|product\\s*strategy/i, count: 4 },\n  { match: /marketing|lead\\s*gen/i,              count: 4 },\n  { match: /sales|conversion/i,                  count: 6 },\n  { match: /finance|technolog|growth/i,          count: 6 }\n];\n\nfunction setIndexFor(tabName) {\n  const name = String(tabName || '').trim();\n\n  const keyed = name.match(/^FUNCTION\\s*(\\d+)/i);\n  if (keyed) {\n    const order = Number(keyed[1]) - 1;\n    if (order >= 0 && order < FRAMEWORK_SETS.length) return order;\n  }\n\n  for (let i = 0; i < FRAMEWORK_SETS.length; i++) {\n    if (FRAMEWORK_SETS[i].match.test(name)) return i;\n  }\n  return -1;\n}\n\nfunction frameworkBase(tabName) {\n  const at = setIndexFor(tabName);\n  if (at === -1) return 0;\n\n  let n = 1;\n  for (let i = 0; i < at; i++) n += FRAMEWORK_SETS[i].count;\n  return n;\n}\n\nfunction parseDate(v) {\n  if (v === null || v === undefined || v === '') return null;\n\n  if (typeof v === 'number' && isFinite(v)) {\n    const d = new Date(Math.round((v - 25569) * 86400000));\n    return isNaN(d.getTime()) ? null\n      : new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());\n  }\n\n  const s = String(v).trim();\n  let m;\n\n  m = s.match(/^(\\d{4})-(\\d{1,2})-(\\d{1,2})$/);\n  if (m) return new Date(+m[1], +m[2] - 1, +m[3]);\n\n  m = s.match(/^(\\d{1,2})[-\\/](\\d{1,2})[-\\/](\\d{4})$/);\n  if (m) return new Date(+m[3], +m[2] - 1, +m[1]);\n\n  m = s.match(/^(\\d{1,2})-([A-Za-z]{3})[A-Za-z]*-(\\d{4})$/);\n  if (m && MONTHS[m[2].toLowerCase()]) {\n    return new Date(+m[3], MONTHS[m[2].toLowerCase()] - 1, +m[1]);\n  }\n  return null;\n}\n\nconst pad = (n) => String(n).padStart(2, '0');\nconst iso = (d) => d ? d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) : '';\nconst hours = (a, b) => (b.getTime() - a.getTime()) / 3600000;\n\nfunction readAttempts(cell) {\n  const out = {};\n  String(cell == null ? '' : cell).split('|').forEach((chunk) => {\n    const m = chunk.trim().match(/^(A\\d+)\\s*:\\s*(.+?)\\s*$/i);\n    if (m) {\n      const d = parseDate(m[2]);\n      if (d) out[m[1].toUpperCase()] = d;\n    }\n  });\n  return out;\n}\n\nconst key = (b, f, a) => b + '|' + f + '|' + a;\n\nconst deadlines = {};\nconst businesses = {};\n\nconst gridRanges = ($(GRID_NODE).first().json.valueRanges) || [];\n\ngridRanges.forEach((rangeObj) => {\n  const tab = String(rangeObj.range || '').split('!')[0]\n    .replace(/^'|'$/g, '').replace(/''/g, \"'\");\n  const values = rangeObj.values || [];\n  if (!values.length) return;\n\n  const head = values[0].map((h) => String(h == null ? '' : h));\n  if (!/business/i.test(head[BUSINESS_COL] || '')) return;\n\n  const base = frameworkBase(tab);\n  let block = -1;\n\n  for (let c = FIRST_BLOCK; c < head.length; c++) {\n    if (!/status/i.test(head[c] || '')) continue;\n\n    block++;\n\n    const fwMatch = head[c].match(/\\bF\\d+\\b/i);\n    const framework = base\n      ? 'F' + (base + block)\n      : (fwMatch ? fwMatch[0].toUpperCase() : 'F' + (block + 1));\n\n    for (let r = 1; r < values.length; r++) {\n      const row = values[r] || [];\n      const business = String(row[BUSINESS_COL] == null ? '' : row[BUSINESS_COL]).trim();\n      if (!business) continue;\n\n      const advisor = String(row[ADVISOR_COL] == null ? '' : row[ADVISOR_COL]).trim()\n                      || '(no advisor)';\n      businesses[business] = advisor;\n\n      const starts = readAttempts(row[c - 1]);\n\n      Object.keys(starts).forEach((attempt) => {\n        deadlines[key(business, framework, attempt)] = {\n          start: starts[attempt], advisor, tab, row: r + 1,\n        };\n      });\n    }\n  }\n});\n\nconst logValues = ($(LOG_NODE).first().json.values) || [];\nconst events = [];\n\nfor (let i = 1; i < logValues.length; i++) {\n  const r = logValues[i] || [];\n  const business = String(r[3] == null ? '' : r[3]).trim();\n  const framework = String(r[4] == null ? '' : r[4]).trim().toUpperCase();\n  const status = String(r[6] == null ? '' : r[6]).trim();\n  if (!business || !framework || !status) continue;\n\n  const when = new Date(String(r[1] || ''));\n  if (isNaN(when.getTime())) continue;\n\n  events.push({\n    logId: Number(r[0]) || i,\n    at: when,\n    advisor: String(r[2] == null ? '' : r[2]).trim(),\n    business,\n    framework,\n    attempt: String(r[5] == null ? '' : r[5]).trim().toUpperCase() || 'A1',\n    status,\n    seeded: when.getUTCFullYear() === SEED_YEAR,\n  });\n}\n\nevents.sort((a, b) => (a.at - b.at) || (a.logId - b.logId));\n\nconst byAttempt = {};\nevents.forEach((ev) => {\n  const k = key(ev.business, ev.framework, ev.attempt);\n  (byAttempt[k] = byAttempt[k] || []).push(ev);\n});\n\nconst rows = [];\nconst allKeys = new Set(Object.keys(deadlines).concat(Object.keys(byAttempt)));\n\nallKeys.forEach((k) => {\n  const [business, framework, attempt] = k.split('|');\n  const grid = deadlines[k] || null;\n  const log = byAttempt[k] || [];\n\n  const advisor = (grid && grid.advisor)\n    || (log.length && log[log.length - 1].advisor)\n    || businesses[business] || '(no advisor)';\n\n  const start = grid ? grid.start : null;\n  const due = start ? new Date(start.getTime() + SLA_HOURS * 3600000) : null;\n\n  const current = log.length ? log[log.length - 1].status : '';\n\n  const firstOutcome = log.find(\n    (ev) => !ev.seeded && CALL_OUTCOMES.indexOf(ev.status) !== -1\n  ) || null;\n\n  let verdict, lateHours = 0, calledAt = null;\n\n  if (!start) {\n    verdict = current === AWAITING || !current ? 'paused' : 'no_start_date';\n  } else if (firstOutcome) {\n    calledAt = firstOutcome.at;\n    lateHours = Math.max(0, hours(start, calledAt) - SLA_HOURS);\n    verdict = lateHours > 0 ? 'late' : 'on_time';\n  } else if (current === AWAITING) {\n    verdict = 'paused';\n  } else {\n    lateHours = Math.max(0, hours(start, NOW) - SLA_HOURS);\n    verdict = lateHours > 0 ? 'late_pending' : 'in_window';\n  }\n\n  rows.push({\n    business,\n    framework,\n    attempt,\n    advisor,\n    tab: grid ? grid.tab : '',\n    row: grid ? grid.row : 0,\n    startDate: iso(start),\n    dueDate: iso(due),\n    calledDate: iso(calledAt),\n    currentStatus: current || (start ? RUNNING : ''),\n    outcome: firstOutcome ? firstOutcome.status : '',\n    verdict,\n    lateHours: Math.round(lateHours * 10) / 10,\n    lateDays: Math.round((lateHours / 24) * 10) / 10,\n    reopened: log.filter((ev) => ev.status === 'Completed').length > 0\n              && current !== 'Completed',\n    seededOnly: log.length > 0 && log.every((ev) => ev.seeded),\n    history: log.map((ev) => ({\n      logId: ev.logId,\n      date: ev.at.toISOString(),\n      status: ev.status,\n      seeded: ev.seeded,\n    })),\n  });\n});\n\nrows.sort((a, b) =>\n  a.business.localeCompare(b.business)\n  || a.framework.localeCompare(b.framework, undefined, { numeric: true })\n  || a.attempt.localeCompare(b.attempt, undefined, { numeric: true })\n);\n\nreturn [{\n  json: {\n    generatedAt: NOW.toISOString(),\n    slaHours: SLA_HOURS,\n    counts: {\n      attempts: rows.length,\n      onTime: rows.filter((r) => r.verdict === 'on_time').length,\n      late: rows.filter((r) => r.verdict === 'late').length,\n      latePending: rows.filter((r) => r.verdict === 'late_pending').length,\n      inWindow: rows.filter((r) => r.verdict === 'in_window').length,\n      paused: rows.filter((r) => r.verdict === 'paused').length,\n      reopened: rows.filter((r) => r.reopened).length,\n      unmatched: rows.filter((r) => !r.startDate && r.history.length).length,\n    },\n    rows,\n  },\n}];\n"
+      },
+      "id": "c82a5116-4e09-4296-8741-8f976c2e8b61",
+      "name": "Parse Framework Calls",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        1040,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Cache-Control",
+                "value": "no-store, no-cache, must-revalidate, max-age=0"
+              },
+              {
+                "name": "Pragma",
+                "value": "no-cache"
+              },
+              {
+                "name": "Expires",
+                "value": "0"
+              },
+              {
+                "name": "Surrogate-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "id": "a0cc0764-212d-4db1-9975-1f891db41465",
+      "name": "Respond - Data",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1264,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "path": "framework-tracker/functions",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "4a0fc096-56bd-4741-9ac4-fe70772bd5f4",
+      "name": "Webhook - Functions",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        480
+      ],
+      "webhookId": "tracker-functions"
+    },
+    {
+      "parameters": {
+        "url": "=https://sheets.googleapis.com/v4/spreadsheets/1Cer9SIAzrp0EYOx82w6P71JWOOSF5L76XldzGKfV78M?fields=sheets.properties.title",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "options": {}
+      },
+      "id": "fc70790b-3ae7-433c-a246-2761ed3734ad",
+      "name": "HTTP - Sheet Tabs (Functions)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        144,
+        480
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "5BbadQKQl6I0DKSx",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Light endpoint: just the tab list, for a dashboard that wants to populate a\n// picker before pulling the full dataset.\nconst titles = ($input.first().json.sheets || [])\n  .map(s => s.properties && s.properties.title)\n  .filter(Boolean)\n  .filter(t => /^FUNCTION/i.test(t));\n\nreturn [{ json: { success: true, functions: titles, updatedAt: new Date().toISOString() } }];\n"
+      },
+      "id": "0ae6692c-839e-4013-bf48-c2728ca6a5a9",
+      "name": "Filter Function Tabs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        368,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Access-Control-Allow-Origin",
+                "value": "*"
+              },
+              {
+                "name": "Cache-Control",
+                "value": "no-store, no-cache, must-revalidate, max-age=0"
+              },
+              {
+                "name": "Pragma",
+                "value": "no-cache"
+              },
+              {
+                "name": "Expires",
+                "value": "0"
+              },
+              {
+                "name": "Surrogate-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "id": "f931a181-08c3-4c9f-8815-4b1e85a723ad",
+      "name": "Respond - Functions",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        592,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1J-3UtCH4ZT1ewLdjGgDeoGrK6iNqVYMI5rbs_eqget4/values/_CallLog!A:G?valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "options": {}
+      },
+      "id": "5437e714-9a26-479f-b39f-4bd93f4d37f6",
+      "name": "HTTP - Load Log",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        816,
+        256
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "5BbadQKQl6I0DKSx",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "framework-tracker/log",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "61b66d81-e3cc-4988-b8e9-a7733ccb483e",
+      "name": "Webhook - Log",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -80,
+        704
+      ],
+      "webhookId": "tracker-log"
+    },
+    {
+      "parameters": {
+        "jsCode": "const STATUSES = [\n  'No status',\n  'Call pending',\n  'Response pending',\n  'Call postponed by client',\n  'Call not received',\n  'Completed'\n];\n\nconst j = $input.first().json;\nconst p = j.body || j;\n\nfunction canon(raw) {\n  const s = String(raw == null ? '' : raw).replace(/\\s+/g, ' ').trim();\n  if (!s) return '';\n  const hit = STATUSES.find((v) => v.toLowerCase() === s.toLowerCase());\n  return hit || s;\n}\n\nconst business = String(p.business || '').trim();\nif (!business) throw new Error('Payload has no business name.');\n\nconst changes = Array.isArray(p.changes) ? p.changes : [];\nif (!changes.length) throw new Error('Payload carried no changes.');\n\nconst date = p.editedAt || new Date().toISOString();\nconst advisor = String(p.advisor || '').trim();\n\nconst base = Date.now() * 1000;\n\nconst out = [];\nlet seq = 0;\n\nfor (const c of changes) {\n  const status = canon(c && c.newStatus);\n  if (!status) continue;\n\n  const fw = String((c && c.framework) || '').toUpperCase().match(/\\bF\\d+\\b/);\n  if (!fw) continue;\n\n  const attempt = String((c && c.attempt) || '').toUpperCase().match(/\\bA\\d+\\b/);\n\n  out.push({\n    json: {\n      logId: base + (seq++),\n      date,\n      advisor,\n      business,\n      framework: fw[0],\n      attempt: attempt ? attempt[0] : 'A1',\n      status\n    }\n  });\n}\n\nif (!out.length) {\n  throw new Error('No change had both a status and an F-code. Nothing to log.');\n}\n\nreturn out;\n"
+      },
+      "id": "45b6b332-f267-4747-8414-82647b9595c6",
+      "name": "Build Log Row",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [
+        144,
+        704
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://sheets.googleapis.com/v4/spreadsheets/1J-3UtCH4ZT1ewLdjGgDeoGrK6iNqVYMI5rbs_eqget4/values/_CallLog!A:G:append?valueInputOption=RAW&insertDataOption=OVERWRITE",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ values: [[ $json.logId, $json.date, $json.advisor, $json.business, $json.framework, $json.attempt, $json.status ]] }) }}",
+        "options": {}
+      },
+      "id": "2d5fbd76-2a9f-4599-b368-18d5236bde8c",
+      "name": "Sheets - Append Log Row",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        368,
+        704
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "5BbadQKQl6I0DKSx",
+          "name": "Google Service Account account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, appended: $json.updates ? $json.updates.updatedRows : 0 } }}",
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "name": "Cache-Control",
+                "value": "no-store"
+              }
+            ]
+          }
+        }
+      },
+      "id": "fdb5866a-f3b6-4ad1-b54a-82629cc1aa37",
+      "name": "Respond - Log",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        592,
+        704
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook - Data": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Sheet Tabs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Sheet Tabs": {
+      "main": [
+        [
+          {
+            "node": "Build batchGet URL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build batchGet URL": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Load All Tabs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Load All Tabs": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Load Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Framework Calls": {
+      "main": [
+        [
+          {
+            "node": "Respond - Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - Functions": {
+      "main": [
+        [
+          {
+            "node": "HTTP - Sheet Tabs (Functions)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Sheet Tabs (Functions)": {
+      "main": [
+        [
+          {
+            "node": "Filter Function Tabs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Function Tabs": {
+      "main": [
+        [
+          {
+            "node": "Respond - Functions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP - Load Log": {
+      "main": [
+        [
+          {
+            "node": "Parse Framework Calls",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - Log": {
+      "main": [
+        [
+          {
+            "node": "Build Log Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Log Row": {
+      "main": [
+        [
+          {
+            "node": "Sheets - Append Log Row",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sheets - Append Log Row": {
+      "main": [
+        [
+          {
+            "node": "Respond - Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "13d0687c-37d4-46a8-a333-0b1d9cb8dfbf",
+  "meta": {
+    "instanceId": "6e6e541fef6afdf35f84c6ae61873315996856eea6e8ced5aaa9d698b3e35b2c"
+  },
+  "nodeGroups": [],
+  "id": "BLayiCaMpSBagzCd",
+  "tags": []
+}

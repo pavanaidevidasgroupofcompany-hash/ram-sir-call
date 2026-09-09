@@ -1,0 +1,893 @@
+*{margin:0;padding:0;box-sizing:border-box}
+
+/* ============ violet theme — the default ============
+   Soft lavender ground, white cards, one violet accent, diffuse blue-tinted
+   shadows instead of hard borders.
+
+   The OUTCOME colours stay green / amber / red / sky / grape rather than
+   becoming shades of violet. They are not decoration — green means on time and
+   red means overdue, in the pills, the donut, the stacked bars and the client
+   cards alike. Violet is the furniture: brand, nav, active states, the hero
+   card and the neutral chart bars. */
+:root{
+  --bg:#E7EAF7;
+  --shell:#FFFFFF;
+  --surface:#FFFFFF;
+  --surface-2:#F5F6FE;
+  --surface-3:#EBEEFC;
+  --border:#E7E9F8;
+  --border-soft:#F0F2FC;
+  --text:#191A3E;
+  --muted:#6E7191;
+  --hint:#6B6E8E;   /* 5.0:1 on white — 11.5px sub-labels are normal text */
+
+  /* brand violet, used for chrome rather than for meaning */
+  --brand:#6C5CE7;
+  --brand-2:#8B7BFF;
+  --brand-lt:#EEEBFF;
+  --brand-ink:#FFFFFF;
+  --grad:linear-gradient(150deg,#7A5CF0 0%,#6C5CE7 45%,#5B47D6 100%);
+
+  --lime:#12A150;--lime-lt:#E6F7EE;--lime-dk:#0A6E36;
+  --mag:#C2189E;--mag-lt:#FDEBF8;--mag-dk:#8C0F71;
+  --sun:#B4780A;--sun-lt:#FDF3E0;--sun-dk:#7A5006;
+  --sky:#0C7E9E;--sky-lt:#E2F6FC;--sky-dk:#075367;
+  --coral:#E23D4E;--coral-lt:#FDEAEC;--coral-dk:#9B1F2D;
+  --grape:#6C5CE7;--grape-lt:#EEEBFF;--grape-dk:#4632B4;
+
+  /* engine tone aliases, so component classes keep working */
+  --blue:var(--sky);--blue-lt:var(--sky-lt);--blue-dk:var(--sky-dk);
+  --green:var(--lime);--green-lt:var(--lime-lt);--green-dk:var(--lime-dk);
+  --amber:var(--sun);--amber-lt:var(--sun-lt);--amber-dk:var(--sun-dk);
+  --red:var(--coral);--red-lt:var(--coral-lt);--red-dk:var(--coral-dk);
+  --violet:var(--grape);--violet-lt:var(--grape-lt);--violet-dk:var(--grape-dk);
+  --pink:var(--mag);--pink-lt:var(--mag-lt);--pink-dk:var(--mag-dk);
+
+  /* SPACING SCALE. Every padding, gap and margin in this stylesheet comes from
+     these eight steps — no loose 13px or 17px anywhere. Two components with the
+     same job get the same number because they name the same token, and pairs
+     that must line up (a flush card and its head, a th and its td) can't drift
+     apart. Adjusting the rhythm of the whole dashboard means editing one line. */
+  --s1:4px;--s2:8px;--s3:12px;--s4:16px;
+  --s5:20px;--s6:24px;--s7:32px;--s8:48px;--s9:64px;
+
+  --r:16px;--r-lg:20px;--r-xl:24px;
+  /* Soft, blue-tinted and layered — the reference separates cards with light
+     and depth, not with lines. Borders stay nearly invisible. */
+  --sh:0 1px 2px rgba(72,66,142,.05),0 4px 12px -4px rgba(72,66,142,.14),
+       0 16px 28px -18px rgba(72,66,142,.24);
+  --sh-md:0 12px 32px -8px rgba(88,84,171,.22);
+  --glow:0 0 0 1px rgba(108,92,231,.35),0 10px 28px -10px rgba(108,92,231,.45);
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+
+/* dark variant — same violet accent, for low light */
+[data-theme="dark"]{
+  --bg:#0F1020;
+  --shell:#171833;
+  --surface:#1B1D3A;
+  --surface-2:#232551;
+  --surface-3:#2B2E60;
+  --border:#2A2C57;
+  --border-soft:#232548;
+  --text:#ECEDFB;
+  --muted:#A3A6CC;
+  --hint:#8A8DBC;
+
+  --brand:#8B7BFF;
+  --brand-2:#A79AFF;
+  --brand-lt:#282A5C;
+  --brand-ink:#12132B;
+  --grad:linear-gradient(150deg,#8B7BFF 0%,#6C5CE7 50%,#4B39C4 100%);
+
+  --lime:#3DDC84;--lime-lt:#12301F;--lime-dk:#8CF0B6;
+  --mag:#FF7AE0;--mag-lt:#381430;--mag-dk:#FFB3EE;
+  --sun:#F5C451;--sun-lt:#33280D;--sun-dk:#FBE1A0;
+  --sky:#4FD8FF;--sky-lt:#0F2F3B;--sky-dk:#A5EDFF;
+  --coral:#FF6B7A;--coral-lt:#3A1720;--coral-dk:#FFA9B2;
+  --grape:#8B7BFF;--grape-lt:#282A5C;--grape-dk:#C3B9FF;
+  --sh:0 2px 10px rgba(0,0,0,.4),0 10px 30px -14px rgba(0,0,0,.6);
+  --sh-md:0 16px 40px -10px rgba(0,0,0,.6);
+  --glow:0 0 0 1px rgba(139,123,255,.4),0 10px 28px -10px rgba(139,123,255,.4);
+}
+
+html{
+  font-family:'Inter',system-ui,-apple-system,sans-serif;font-size:14px;
+  color:var(--text);background:var(--bg);line-height:1.5;
+}
+/* `overflow-x: hidden` is the reason the sidebar would not stick. Hiding one
+   axis computes the OTHER to `auto`, which quietly makes the body a scroll
+   container — and a position:sticky element sticks to its nearest scrolling
+   ancestor, which then became the body rather than the page. The rail scrolled
+   away with the content.
+
+   `clip` hides the overflow exactly the same way but establishes no scroll
+   container, so sticky keeps working. `hidden` is left first as a fallback:
+   a browser that does not know `clip` ignores that line and keeps the old
+   behaviour rather than gaining a horizontal scrollbar. */
+html,body{max-width:100%;overflow-x:hidden;overflow-x:clip}
+body,#root{min-height:100vh}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:8px;border:2px solid transparent;background-clip:content-box}
+::-webkit-scrollbar-thumb:hover{background:var(--hint);background-clip:content-box}
+::selection{background:var(--brand);color:#fff}
+
+/* ================================================================= layout */
+.app{display:flex;min-height:100vh;padding:var(--s4);gap:var(--s4);background:
+  radial-gradient(1200px 560px at 82% -10%, color-mix(in srgb,var(--brand) 12%,transparent), transparent 60%),
+  radial-gradient(820px 460px at 4% 106%, color-mix(in srgb,var(--brand-2) 10%,transparent), transparent 58%),
+  var(--bg);}
+@media(max-width:760px){.app{padding:0;gap:0}}
+
+.sidebar{
+  width:232px;flex:none;background:var(--shell);border:1px solid var(--border);
+  box-shadow:var(--sh);
+  border-radius:var(--r-xl);padding:var(--s4) var(--s3);display:flex;flex-direction:column;
+  /* top and height follow .app's padding, so the rail can never sit off-grid */
+  gap:var(--s1);position:sticky;top:var(--s4);height:calc(100vh - var(--s4) * 2);overflow-y:auto;
+}
+.sb-logo{padding:var(--s2) var(--s2) var(--s4)}
+.sb-logo-inner{display:flex;align-items:center;gap:var(--s3)}
+.sb-mark{
+  width:40px;height:40px;flex:none;border-radius:14px;background:var(--grad);
+  color:#fff;display:flex;align-items:center;justify-content:center;
+  font-weight:800;font-size:14px;letter-spacing:.02em;box-shadow:var(--glow);
+}
+.sb-logo-name{font-weight:700;font-size:14px;letter-spacing:-.01em}
+.sb-logo-sub{font-size:11px;color:var(--hint);margin-top:1px}
+
+.sb-section{margin-top:var(--s3);display:flex;flex-direction:column;gap:var(--s1)}
+.sb-label{
+  font-size:10px;text-transform:uppercase;letter-spacing:.14em;
+  color:var(--hint);padding:0 var(--s3) var(--s2);font-weight:600;
+}
+.sb-item{
+  display:flex;align-items:center;gap:var(--s3);width:100%;padding:var(--s3);
+  border:0;border-radius:14px;background:transparent;color:var(--muted);
+  font:inherit;font-size:13px;font-weight:500;cursor:pointer;text-align:left;
+  transition:background .15s,color .15s;
+}
+.sb-item svg{width:17px;height:17px;flex:none;opacity:.85}
+.sb-item:hover{background:var(--surface-2);color:var(--text)}
+.sb-item.active{background:var(--grad);color:#fff;font-weight:700;box-shadow:var(--glow)}
+.sb-item.active svg{opacity:1}
+.sb-badge{
+  margin-left:auto;background:var(--surface-3);color:var(--muted);
+  padding:2px var(--s2);border-radius:999px;font-size:11px;font-weight:700;font-family:var(--mono);
+}
+.sb-badge.warn{background:var(--coral);color:#fff}
+.sb-item.active .sb-badge{background:rgba(255,255,255,.26);color:#fff}
+
+.sb-foot{margin-top:auto;padding-top:var(--s4);display:flex;flex-direction:column;gap:var(--s3)}
+.src{display:flex;align-items:center;gap:var(--s2);font-size:11px;color:var(--muted);padding:0 var(--s1)}
+.src i{width:7px;height:7px;border-radius:50%;background:var(--hint);flex:none}
+.src.live i{background:var(--lime);box-shadow:0 0 0 3px color-mix(in srgb,var(--lime) 22%,transparent)}
+.src.error i{background:var(--coral);box-shadow:0 0 0 3px color-mix(in srgb,var(--coral) 22%,transparent)}
+.src.loading i{background:var(--sun)}
+
+.btn{
+  display:inline-flex;align-items:center;gap:var(--s2);padding:var(--s3) var(--s4);border-radius:13px;
+  border:1px solid var(--border);background:var(--surface-2);color:var(--text);
+  font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s;
+}
+.btn:hover{background:var(--surface-3);border-color:var(--hint)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+
+.main{flex:1;min-width:0;display:flex;flex-direction:column;gap:var(--s5)}
+
+.page-header{
+  background:var(--shell);border:1px solid var(--border);border-radius:var(--r-xl);
+  padding:var(--s5) var(--s6);box-shadow:var(--sh);
+}
+.page-title-row{display:flex;align-items:center;gap:var(--s4);flex-wrap:wrap}
+.ph-left{display:flex;align-items:center;gap:var(--s3);min-width:0;flex:1}
+.ph-titles{min-width:0}
+.page-title{font-size:24px;font-weight:800;letter-spacing:-.02em;line-height:1.2}
+.page-sub{font-size:12.5px;color:var(--muted);margin-top:var(--s1)}
+.hamburger{
+  display:none;background:var(--surface-2);border:1px solid var(--border);
+  color:var(--text);width:38px;height:38px;border-radius:12px;font-size:17px;cursor:pointer;
+}
+.period{display:flex;gap:var(--s2);flex-wrap:wrap}
+
+.content{display:flex;flex-direction:column;gap:var(--s5);padding-bottom:var(--s7)}
+/* The view wrapper is the REAL stack container, not .content.
+   .content holds exactly one child — this element — so its gap never reached
+   the KPI grid, the split or the chart cards; they sat flush against each
+   other at 0px. Inheriting the gap keeps one source of truth: change the gap
+   on .content (including in the media queries) and this follows. */
+.view-fade{display:flex;flex-direction:column;gap:inherit;animation:fade .22s ease}
+@keyframes fade{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){.view-fade{animation:none}}
+
+/* ================================================================ pickers */
+.mpick{position:relative}
+.mpick-btn{
+  display:flex;align-items:center;gap:var(--s2);padding:var(--s3) var(--s4);border-radius:14px;
+  border:1px solid var(--border);background:var(--surface-2);color:var(--text);
+  font:inherit;font-size:12.5px;cursor:pointer;min-width:var(--mpw,auto);
+}
+.mpick-btn:hover,.mpick-btn.open{border-color:var(--brand)}
+.mpick-lbl{color:var(--hint);font-size:11px;text-transform:uppercase;letter-spacing:.09em;font-weight:600}
+.mpick-val{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:210px}
+.mpick-caret{color:var(--muted);font-size:10px;margin-left:auto}
+.mpick-pop{
+  position:absolute;top:calc(100% + var(--s2));right:0;z-index:70;min-width:100%;
+  background:var(--surface);border:1px solid var(--border);border-radius:16px;
+  padding:var(--s1);box-shadow:var(--sh-md);max-height:320px;overflow-y:auto;
+}
+.mpick-opt{
+  display:block;width:100%;text-align:left;padding:var(--s2) var(--s3);border:0;border-radius:11px;
+  background:transparent;color:var(--text);font:inherit;font-size:12.5px;cursor:pointer;white-space:nowrap;
+}
+.mpick-opt:hover{background:var(--surface-2)}
+.mpick-opt.active{background:var(--brand);color:#fff;font-weight:700}
+
+/* ==================================================================== kpi */
+/* 168px keeps all five outcome cards on one row down to ~1150px, instead of
+   breaking 4 + 1 and stranding the last card on a line of its own. */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:var(--s4)}
+.kpi{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+  padding:var(--s5);position:relative;overflow:hidden;box-shadow:var(--sh);
+  display:flex;flex-direction:column;min-width:0;
+}
+.kpi::after{
+  content:"";position:absolute;inset:auto -30% -60% auto;width:170px;height:170px;
+  border-radius:50%;opacity:.07;filter:blur(10px);pointer-events:none;
+}
+.kpi.blue::after{background:var(--sky)}
+.kpi.green::after{background:var(--lime)}
+.kpi.amber::after{background:var(--sun)}
+.kpi.red::after{background:var(--coral)}
+.kpi.violet::after{background:var(--grape)}
+.kpi.pink::after{background:var(--mag)}
+.kpi.hint::after{background:var(--hint)}
+/* Icon tile left, count pill right — the reference's card header row. */
+.kpi-top{
+  display:flex;align-items:center;justify-content:space-between;gap:var(--s2);
+  margin-bottom:var(--s3);position:relative;z-index:1;
+}
+.kpi-icon{
+  width:34px;height:34px;border-radius:12px;display:flex;align-items:center;
+  justify-content:center;flex:none;
+}
+.kpi-icon svg{width:17px;height:17px}
+.kpi.blue .kpi-icon{background:var(--sky-lt);color:var(--sky)}
+.kpi.green .kpi-icon{background:var(--lime-lt);color:var(--lime)}
+.kpi.amber .kpi-icon{background:var(--sun-lt);color:var(--sun)}
+.kpi.red .kpi-icon{background:var(--coral-lt);color:var(--coral)}
+.kpi.violet .kpi-icon{background:var(--grape-lt);color:var(--grape)}
+.kpi.pink .kpi-icon{background:var(--mag-lt);color:var(--mag)}
+.kpi.hint .kpi-icon{background:var(--surface-3);color:var(--hint)}
+.kpi-label{
+  font-size:11.5px;color:var(--muted);font-weight:600;letter-spacing:.02em;
+  position:relative;z-index:1;overflow-wrap:anywhere;
+}
+.kpi-value{font-size:28px;font-weight:800;letter-spacing:-.025em;line-height:1.15;margin-top:var(--s1);position:relative;z-index:1}
+/* The count, as the reference's top-right pill. Tinted to its card's tone so
+   the pill, the icon tile and the figure all read as one colour. */
+.kpi-alt{
+  font-size:11px;font-weight:700;letter-spacing:-.01em;line-height:1.2;flex:none;
+  padding:3px var(--s2);border-radius:999px;background:var(--surface-3);color:var(--muted);
+  white-space:nowrap;
+}
+.kpi.green .kpi-alt{background:var(--lime-lt);color:var(--lime-dk)}
+.kpi.amber .kpi-alt{background:var(--sun-lt);color:var(--sun-dk)}
+.kpi.red .kpi-alt{background:var(--coral-lt);color:var(--coral-dk)}
+.kpi.violet .kpi-alt{background:var(--grape-lt);color:var(--grape-dk)}
+.kpi.blue .kpi-alt{background:var(--sky-lt);color:var(--sky-dk)}
+.kpi.hint .kpi-alt{background:var(--surface-3);color:var(--hint)}
+.kpi.green .kpi-value{color:var(--lime)}
+.kpi.red .kpi-value{color:var(--coral)}
+.kpi.amber .kpi-value{color:var(--sun)}
+.kpi.violet .kpi-value{color:var(--grape)}
+.kpi.blue .kpi-value{color:var(--sky)}
+.kpi.hint .kpi-value{color:var(--hint)}
+
+/* The filled violet feature card, echoing the reference's gradient panel. */
+.kpi.hero{background:var(--grad);border-color:transparent;box-shadow:var(--sh-md)}
+.kpi.hero::after{display:none}
+.kpi.hero .kpi-label,.kpi.hero .kpi-value{color:#fff}
+.kpi.hero .kpi-icon{background:rgba(255,255,255,.18);color:#fff}
+.kpi.hero .kpi-alt{background:rgba(255,255,255,.2);color:#fff}
+
+/* =================================================================== card */
+.card{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-xl);padding:var(--s6);box-shadow:var(--sh);
+}
+/* A flush card drops its side padding so a table can run edge to edge. Its head
+   is inset by the table's own cell padding — not the card's --s6 — so the title
+   sits directly above the first column instead of 8px to its left. */
+.card.flush{padding:var(--s6) 0 0}
+.card.flush .card-head,.card.flush .table-filters{padding-left:var(--s4);padding-right:var(--s4)}
+.card-head{display:flex;align-items:flex-start;gap:var(--s4);margin-bottom:var(--s5);flex-wrap:wrap}
+.card-head>div:first-child{flex:1;min-width:0}
+.card-title{font-size:15px;font-weight:700;letter-spacing:-.01em}
+.card-sub{font-size:12px;color:var(--muted);margin-top:var(--s1)}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:var(--s5)}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+
+.empty{
+  background:var(--surface);border:1px dashed var(--border);border-radius:var(--r-xl);
+  padding:var(--s8) var(--s6);text-align:center;color:var(--muted);font-size:13px;
+}
+
+/* ================================================================== table */
+.table-wrap{width:100%}
+/* The scroller. Capping its height is what makes a sticky header worth having
+   — without a scroll box the header has nothing to stick to and the page just
+   grows. Both axes scroll here: vertical for the rows, horizontal for the
+   columns that do not fit. */
+.table-scroll{overflow:auto;max-height:min(68vh,640px)}
+.row-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.row-table th{
+  /* th and td share the same token, so columns line up exactly */
+  text-align:left;padding:var(--s3) var(--s4);font-size:10.5px;text-transform:uppercase;
+  letter-spacing:.11em;color:var(--hint);font-weight:700;white-space:nowrap;
+  border-bottom:1px solid var(--border);background:var(--surface-2);
+}
+.row-table th:first-child{border-top-left-radius:0}
+.row-table th.sortable{cursor:pointer;user-select:none}
+.row-table th.sortable:hover{color:var(--brand)}
+.row-table td{padding:var(--s3) var(--s4);border-bottom:1px solid var(--border-soft);white-space:nowrap}
+.row-table tbody tr:hover{background:var(--surface-2)}
+.row-table .num{text-align:right}
+.row-table .mono{font-family:var(--mono);font-size:12px}
+
+/* ================================================= frozen header + column
+   The header row stays put while the rows scroll under it, and the business
+   name stays put while the columns scroll behind it. Both are plain sticky
+   cells; the only fiddly parts are the ones sticky gets wrong on its own:
+
+     · a sticky cell is transparent by default, so each needs its own
+       background or the scrolled content shows straight through it;
+     · borders do not travel with a sticky cell, so the header's bottom rule
+       and the frozen column's right-hand rule are drawn as box shadows;
+     · the top-left cell is sticky on both axes and must outrank both, or the
+       first column slides over it.
+*/
+.row-table.sticky thead th{
+  position:sticky;top:0;z-index:2;
+  background:var(--surface-2);
+  box-shadow:inset 0 -1px 0 var(--border);
+}
+.row-table.sticky thead th{border-bottom:none}
+
+.row-table.sticky .freeze{
+  position:sticky;left:0;z-index:1;
+  background:var(--surface);
+  box-shadow:1px 0 0 var(--border-soft);
+}
+/* The row hover has to reach the frozen cell too, or the first column stays
+   white while the rest of its row lights up. */
+.row-table.sticky tbody tr:hover .freeze{background:var(--surface-2)}
+/* Both axes at once. */
+.row-table.sticky thead th.freeze{
+  z-index:3;background:var(--surface-2);
+  box-shadow:inset 0 -1px 0 var(--border),1px 0 0 var(--border);
+}
+
+.period{flex-wrap:wrap;row-gap:var(--s2)}
+
+/* The table's own filter row. It sits under the card head and above the
+   header row, tied to the table by a rule rather than floating between two
+   unrelated things. `.card.flush` pads its head with --s4 rather than the
+   card default, so this row matches that and lines up with it. */
+.table-filters{
+  display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;row-gap:var(--s2);
+  padding-bottom:var(--s4);
+}
+.clear-filters{align-self:center}
+/* "25 calls of 127" — the total stays visible so a filtered count never reads
+   as the whole list. */
+.card-title-of{font-weight:600;color:var(--muted)}
+@media(max-width:760px){
+  .table-filters{padding-bottom:var(--s3);gap:var(--s2)}
+}
+
+/* ============================================================== the pager */
+.pager{
+  display:flex;align-items:center;gap:var(--s4);flex-wrap:wrap;
+  padding:var(--s4) var(--s4) 0;
+}
+.pager-count{font-size:12px;color:var(--muted);font-weight:600}
+.pager-size,.pager-nav{display:flex;align-items:center;gap:var(--s1)}
+.pager-nav{margin-left:auto}
+.pager-lbl{
+  font-size:10.5px;text-transform:uppercase;letter-spacing:.11em;
+  color:var(--hint);font-weight:700;margin-right:var(--s1);
+}
+.pager-page{font-size:12px;color:var(--muted);font-weight:600;padding:0 var(--s2);white-space:nowrap}
+.pager-btn{
+  min-width:30px;height:28px;padding:0 var(--s2);
+  background:var(--surface-2);border:1px solid var(--border);border-radius:9px;
+  font:inherit;font-size:12px;font-weight:700;color:var(--muted);cursor:pointer;
+  transition:color .15s,background .15s,border-color .15s;
+}
+.pager-btn:hover:not(:disabled){color:var(--brand);border-color:var(--brand)}
+.pager-btn.on{background:var(--brand);border-color:var(--brand);color:var(--brand-ink,#fff)}
+.pager-btn:disabled{opacity:.45;cursor:default}
+.pager-btn:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+
+@media(max-width:760px){
+  .pager{gap:var(--s3)}
+  .pager-nav{margin-left:0}
+  .table-scroll{max-height:none}
+}
+
+/* =================================================================== pill */
+.pill{
+  display:inline-flex;align-items:center;gap:var(--s1);padding:var(--s1) var(--s3);border-radius:999px;
+  font-size:10.5px;font-weight:700;letter-spacing:.02em;white-space:nowrap;
+}
+.pill.on_time{background:var(--lime-lt);color:var(--lime)}
+.pill.delay_complete{background:var(--sun-lt);color:var(--sun)}
+.pill.delay_pending{background:var(--coral-lt);color:var(--coral)}
+.pill.in_window{background:var(--sky-lt);color:var(--sky)}
+.pill.invalid,.pill.future{background:var(--grape-lt);color:var(--grape)}
+
+/* ==================================================================== seg */
+.segs{display:flex;gap:var(--s6);flex-wrap:wrap;margin-bottom:var(--s5)}
+.seg{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap}
+.seg-lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.11em;color:var(--hint);font-weight:700}
+.seg-box{display:flex;gap:var(--s1);background:var(--surface-2);padding:var(--s1);border-radius:14px;flex-wrap:wrap}
+.seg-btn{
+  padding:var(--s2) var(--s4);border:0;border-radius:11px;background:transparent;color:var(--muted);
+  font:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:.15s;
+}
+.seg-btn:hover{color:var(--text)}
+.seg-btn.on{background:var(--brand);color:#fff;font-weight:700}
+
+/* ================================================================== warn */
+.warn{background:var(--sun-lt);border:1px solid rgba(247,228,99,.32);border-radius:var(--r-lg);overflow:hidden}
+.warn-head{display:flex;align-items:flex-start;gap:var(--s3);padding:var(--s4) var(--s5);cursor:pointer}
+.warn-ico{font-size:16px;color:var(--sun);flex:none;line-height:1.3}
+.warn-title{font-weight:700;font-size:13px;color:var(--sun-dk)}
+.warn-sub{font-size:11.5px;color:var(--muted);margin-top:var(--s1);line-height:1.55}
+.warn-caret{color:var(--muted);font-size:11px;transition:transform .18s}
+.warn-caret.up{transform:rotate(180deg)}
+.warn-list{border-top:1px solid rgba(247,228,99,.22);max-height:290px;overflow-y:auto}
+.warn-row{display:flex;gap:var(--s3);padding:var(--s2) var(--s5);font-size:12px;border-bottom:1px solid var(--border-soft)}
+.warn-tag{font-family:var(--mono);font-size:10.5px;color:var(--hint);flex:none;padding-top:1px;min-width:96px}
+.warn-msg{color:var(--muted)}
+.warn-msg b{color:var(--text)}
+
+/* ============================================================ client cards */
+.cl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(252px,1fr));gap:var(--s4)}
+.cl-card{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+  box-shadow:var(--sh);padding:var(--s5);cursor:pointer;text-align:left;width:100%;font:inherit;color:inherit;
+  display:flex;flex-direction:column;gap:var(--s4);transition:border-color .15s,box-shadow .15s,transform .15s;
+}
+.cl-card:hover{border-color:var(--brand);box-shadow:var(--glow);transform:translateY(-2px)}
+.cl-card:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+@media(prefers-reduced-motion:reduce){.cl-card:hover{transform:none}}
+.cl-name{font-weight:700;font-size:13.5px;line-height:1.35;display:flex;align-items:baseline;gap:var(--s2)}
+/* Rank badge — only shown on the ranked Delay Pending view, where position
+   carries meaning. Sits on the name row so it reads as "#1 <business>". */
+.cl-rank{
+  font-size:11px;font-weight:800;color:var(--coral-dk);background:var(--coral-lt);
+  border-radius:5px;padding:2px var(--s2);flex:none;letter-spacing:-.01em;
+}
+/* At 11px this is small text, so it needs 4.5:1 — the darker tone clears it
+   on the light ground; the dark theme flips back to the brighter one. */
+[data-theme="dark"] .cl-rank{color:var(--coral)}
+.cl-adv{font-size:11px;color:var(--hint);margin-top:var(--s1)}
+.cl-bar{display:flex;height:9px;border-radius:6px;overflow:hidden;background:var(--surface-3)}
+.cl-bar i{display:block;height:100%}
+.cl-stats{display:flex;gap:var(--s4);flex-wrap:wrap}
+.cl-stat{font-size:11px;color:var(--muted);display:flex;align-items:baseline;gap:var(--s1)}
+.cl-stat b{font-size:16px;font-weight:800;font-family:var(--mono)}
+.cl-foot{
+  display:flex;justify-content:space-between;align-items:center;gap:var(--s2);
+  border-top:1px solid var(--border-soft);padding-top:var(--s3);font-size:11px;color:var(--muted);
+}
+.back-btn{
+  display:inline-flex;align-items:center;gap:var(--s2);background:none;border:0;color:var(--brand);
+  font:inherit;font-size:12.5px;font-weight:700;cursor:pointer;padding:0;
+}
+.back-btn svg{width:15px;height:15px}
+.back-btn:hover{text-decoration:underline}
+
+/* ================================================================= states */
+.state-panel{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-xl);
+  padding:var(--s9) var(--s6);text-align:center;box-shadow:var(--sh);
+}
+.state-ico{font-size:34px;margin-bottom:var(--s4);color:var(--sun)}
+.state-spin{font-size:30px;margin-bottom:var(--s4);color:var(--brand);animation:spin 1.1s linear infinite;display:inline-block}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.state-spin{animation:none}}
+.state-title{font-size:17px;font-weight:700;margin-bottom:var(--s2)}
+.state-sub{font-size:13px;color:var(--muted);max-width:520px;margin:0 auto;line-height:1.6}
+.state-url{
+  font-family:var(--mono);font-size:11.5px;color:var(--hint);background:var(--surface-2);
+  border:1px solid var(--border);border-radius:11px;padding:var(--s2) var(--s3);margin:var(--s4) auto 0;
+  display:inline-block;word-break:break-all;max-width:100%;
+}
+
+.backdrop{display:none}
+.tone-blue{}
+
+/* ================================================================ desktop */
+/* The mirror of the mobile block: at these widths the cards are wide, so the
+   same 16px gap that looks generous at 1000px reads as cramped at 1500px.
+   Everything steps up one notch — s4→s5, s5→s6, s6→s7.
+
+   The 1260px floor is not arbitrary. Below it the five KPI cards no longer fit
+   one row at the larger gap: they need 5x168 + 4x24 = 936px, and the main
+   column is only (viewport - 40 app padding - 232 sidebar - 20 app gap), so
+   the row needs >=1228px. At 1260 the column is 968px and clears it; at 1200
+   it would be 908 and the row would break 4 + 1, stranding the last card.
+   Lower this floor, or raise --s6 here, and re-check that row. */
+@media(min-width:1260px){
+  .app{padding:var(--s5);gap:var(--s5)}
+  .sidebar{top:var(--s5);height:calc(100vh - var(--s5) * 2)}
+  .main{gap:var(--s6)}
+  .content{gap:var(--s7);padding-bottom:var(--s8)}
+  .split{gap:var(--s6)}
+  .kpi-grid{gap:var(--s6)}
+  .cl-grid{gap:var(--s6)}
+  .kpi{padding:var(--s6)}
+  .card{padding:var(--s7)}
+  .card.flush{padding:var(--s7) 0 0}
+  .page-header{padding:var(--s6) var(--s7)}
+  /* the flush head still matches the table's cell padding, not the card's */
+  .card.flush .card-head,.card.flush .table-filters{padding-left:var(--s4);padding-right:var(--s4)}
+}
+
+/* ================================================================= mobile */
+@media(max-width:760px){
+  .sidebar{
+    position:fixed;left:0;top:0;bottom:0;height:100vh;z-index:100;border-radius:0;
+    transform:translateX(-100%);transition:transform .22s ease;width:250px;
+  }
+  .sidebar.open{transform:none}
+  .backdrop{display:block;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:99}
+  .hamburger{display:inline-flex;align-items:center;justify-content:center}
+  /* Mobile steps the whole rhythm down one notch — s5→s4, s4→s3 — rather than
+     inventing a second set of numbers. */
+  .main{padding:var(--s3);gap:var(--s3)}
+  .page-header{border-radius:var(--r-lg);padding:var(--s4)}
+  .page-title{font-size:20px}
+  .card{border-radius:var(--r-lg);padding:var(--s4)}
+  .card.flush{padding:var(--s4) 0 0}
+  .card.flush .card-head,.card.flush .table-filters{padding-left:var(--s3);padding-right:var(--s3)}   /* matches the mobile cell padding */
+  .kpi-grid{grid-template-columns:repeat(2,1fr);gap:var(--s3)}
+  .kpi{padding:var(--s4)}
+  .kpi-value{font-size:21px}
+  .kpi-alt{font-size:10.5px;padding:2px 6px}
+  .kpi-top{margin-bottom:var(--s2)}
+  .cl-card{padding:var(--s4)}
+  .row-table th,.row-table td{padding:var(--s3)}
+  .cl-grid{grid-template-columns:1fr}
+  .period{width:100%}
+  .mpick{flex:1}
+  .mpick-btn{width:100%}
+}
+
+/* A lone hero card should not stretch to the full content width — one number
+   in a box the width of the page reads as a banner, not a figure. */
+.kpi-grid.one{grid-template-columns:minmax(220px,380px)}
+
+/* ============================================ where every call stands
+   Two tinted panels — on time and delayed — each with the family total, a ring
+   for its share, and the parser's reasons underneath. The panel is tinted, the
+   cards inside it are tinted a shade further, and the section card stays white:
+   three levels of surface so a reason never reads as a peer of its family. */
+.stands{display:grid;grid-template-columns:var(--stands-cols,1fr 1fr);gap:var(--s5)}
+.stands-panel{
+  border-radius:var(--r-lg);padding:var(--s5);
+  display:flex;flex-direction:column;gap:var(--s4);
+  border:1px solid var(--border-soft);
+}
+.stands-panel.green{background:var(--lime-lt)}
+.stands-panel.red{background:var(--coral-lt)}
+
+.stands-head{display:flex;align-items:center;gap:var(--s4)}
+.stands-icon{
+  width:52px;height:52px;border-radius:50%;flex:none;
+  display:flex;align-items:center;justify-content:center;color:#fff;
+}
+.stands-icon svg{width:24px;height:24px}
+.stands-panel.green .stands-icon{background:var(--lime)}
+.stands-panel.red .stands-icon{background:var(--coral)}
+
+.stands-figure{flex:1;min-width:0}
+.stands-name{font-size:17px;font-weight:800;letter-spacing:-.01em;color:var(--text)}
+.stands-count{font-size:40px;font-weight:800;letter-spacing:-.03em;line-height:1.1}
+.stands-panel.green .stands-count{color:var(--lime)}
+.stands-panel.red .stands-count{color:var(--coral)}
+.stands-of{font-size:12.5px;color:var(--muted);font-weight:600}
+
+/* ---- the ring ---- */
+.donut{width:96px;height:96px;flex:none}
+.donut-track{fill:none;stroke:var(--surface-3);stroke-width:9}
+.donut-fill{fill:none;stroke-width:9;stroke-linecap:round;transition:stroke-dasharray .4s ease}
+.donut.green .donut-fill{stroke:var(--lime)}
+.donut.red .donut-fill{stroke:var(--coral)}
+.donut-text{
+  font-size:17px;font-weight:800;text-anchor:middle;dominant-baseline:central;
+  letter-spacing:-.02em;
+}
+.donut.green .donut-text{fill:var(--lime)}
+.donut.red .donut-text{fill:var(--coral)}
+@media(prefers-reduced-motion:reduce){.donut-fill{transition:none}}
+
+/* ---- the reasons ---- */
+.stands-subs{display:grid;grid-template-columns:repeat(var(--sub-cols,3),minmax(0,1fr));gap:var(--s3)}
+/* Each reason is a button: it opens the calls behind it on All Calls. The
+   border is there at rest, transparent, so picking up a colour on hover moves
+   nothing — a 1px border appearing on hover would shift every label inside. */
+.stands-sub{
+  background:var(--surface);border-radius:var(--r);padding:var(--s3) var(--s4);
+  display:flex;flex-direction:column;gap:var(--s1);min-width:0;width:100%;
+  border:1px solid transparent;font:inherit;color:inherit;text-align:left;
+  cursor:pointer;transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease;
+}
+.stands-sub:hover:not(:disabled){transform:translateY(-2px);box-shadow:var(--sh)}
+.stands-sub.green:hover:not(:disabled){border-color:var(--lime)}
+.stands-sub.red:hover:not(:disabled){border-color:var(--coral)}
+.stands-sub:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+/* The open card stays picked out while its table is below — otherwise, after a
+   scroll, nothing on screen says which of the seven you are reading. */
+.stands-sub.on{border-color:var(--brand);box-shadow:var(--glow)}
+.stands-sub.green.on,.stands-sub.red.on{border-color:var(--brand)}
+/* Nothing behind it, so it is not a link — and says so by not reacting. */
+.stands-sub:disabled{cursor:default}
+@media(prefers-reduced-motion:reduce){
+  .stands-sub{transition:none}
+  .stands-sub:hover:not(:disabled){transform:none}
+}
+.stands-sub-top{display:flex;align-items:center;justify-content:space-between;gap:var(--s2)}
+.stands-sub-icon{
+  width:30px;height:30px;border-radius:10px;flex:none;
+  display:flex;align-items:center;justify-content:center;
+}
+.stands-sub-icon svg{width:15px;height:15px}
+.stands-sub.green .stands-sub-icon{background:var(--lime-lt);color:var(--lime)}
+.stands-sub.red .stands-sub-icon{background:var(--coral-lt);color:var(--coral)}
+.stands-sub-pct{
+  font-size:11px;font-weight:800;padding:3px var(--s2);border-radius:999px;
+  white-space:nowrap;
+}
+.stands-sub.green .stands-sub-pct{background:var(--lime-lt);color:var(--lime-dk)}
+.stands-sub.red .stands-sub-pct{background:var(--coral-lt);color:var(--coral-dk)}
+.stands-sub-value{font-size:26px;font-weight:800;letter-spacing:-.02em;line-height:1.1;color:var(--text)}
+.stands-sub-label{
+  font-size:11.5px;font-weight:600;color:var(--muted);line-height:1.35;
+  overflow-wrap:anywhere;
+}
+/* A reason nothing is in is a real answer, so it recedes rather than vanishes. */
+.stands-sub.zero{opacity:.62}
+.stands-sub.zero .stands-sub-value{color:var(--hint)}
+
+/* ============================================ the call roadmap
+   One call's log laid out left to right — started, then every status change,
+   ending at where it is now. The last node glows, because "where is this call"
+   is the question the row was clicked to answer, and a timeline that treats
+   its last stop like all the others makes you count to find out.
+
+   The nodes animate in along the line rather than all at once: the stagger is
+   what makes it read as a journey travelled instead of a list rotated 90°. */
+.rm-row{cursor:pointer}
+.rm-row.on{background:var(--brand-lt)}
+.row-table.sticky .rm-row.on .freeze{background:var(--brand-lt)}
+.rm-row.on td{border-bottom-color:transparent}
+.rm-tr td{padding:0;background:var(--brand-lt);border-bottom:1px solid var(--border)}
+.rm-tr td{white-space:normal}
+
+.rm{padding:var(--s4) var(--s5) var(--s5);animation:fade .2s ease}
+.rm-cap{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;margin-bottom:var(--s4)}
+.rm-cap-title{font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.rm-cap-n{font-size:11px;font-weight:700;color:var(--hint)}
+/* The second clock, on the caption line rather than as a stop: it is not
+   somewhere the call has been, it is a deadline standing behind where it is. */
+.rm-fu{
+  display:inline-flex;align-items:center;gap:var(--s2);margin-left:auto;
+  padding:3px var(--s3);border-radius:999px;font-size:11px;font-weight:700;
+  background:var(--surface);border:1px solid var(--border);
+}
+.rm-fu svg{width:13px;height:13px}
+.rm-fu-lbl{letter-spacing:.05em;text-transform:uppercase;font-size:10px;color:var(--muted)}
+.rm-fu-due{color:var(--hint);font-weight:600;font-family:var(--mono);font-size:10.5px}
+.rm-fu.red{background:var(--coral-lt);border-color:var(--coral);color:var(--coral-dk)}
+.rm-fu.red svg,.rm-fu.red .rm-fu-val{color:var(--coral)}
+.rm-fu.amber{background:var(--sun-lt);border-color:var(--sun);color:var(--sun-dk)}
+.rm-fu.amber svg{color:var(--sun)}
+.rm-fu.green{background:var(--lime-lt);border-color:var(--lime);color:var(--lime-dk)}
+.rm-fu.green svg{color:var(--lime)}
+.rm-fu.blue{background:var(--sky-lt);border-color:var(--sky);color:var(--sky-dk)}
+.rm-fu.blue svg{color:var(--sky)}
+
+/* Horizontal, and it scrolls rather than wraps: a wrapped roadmap reads as two
+   roadmaps. The line is per-node, drawn to the next one, so it can never run
+   past the last stop the way a single background line does. */
+.rm-track{display:flex;align-items:flex-start;overflow-x:auto;padding-bottom:var(--s2)}
+.rm-node{
+  position:relative;flex:1 0 auto;min-width:148px;max-width:230px;
+  display:flex;flex-direction:column;align-items:center;text-align:center;gap:var(--s2);
+  animation:rm-in .34s cubic-bezier(.2,.7,.3,1) backwards;
+  animation-delay:calc(var(--i,0) * 90ms);
+}
+.rm-seg{
+  position:absolute;top:16px;left:calc(50% + 22px);width:calc(100% - 44px);height:2px;
+  background:var(--border);border-radius:2px;
+  transform:scaleX(0);transform-origin:left center;
+  animation:rm-draw .3s ease forwards;
+  animation-delay:calc(var(--i,0) * 90ms + 150ms);
+}
+.rm-gap{
+  position:absolute;top:-2px;left:100%;transform:translateX(-50%);
+  font-size:10px;font-weight:700;color:var(--hint);white-space:nowrap;
+  background:var(--brand-lt);padding:0 var(--s2);
+}
+/* One variable per tone, rather than a rule per tone per property. The lit dot
+   sets its own text to white, so a glow keyed on currentColor would come out
+   colourless — this keeps the halo the status colour it is announcing. */
+.rm-node.green{--rm-tone:var(--lime)}
+.rm-node.amber{--rm-tone:var(--sun)}
+.rm-node.red{--rm-tone:var(--coral)}
+.rm-node.blue{--rm-tone:var(--sky)}
+.rm-node.violet{--rm-tone:var(--grape)}
+
+.rm-dot{
+  width:34px;height:34px;border-radius:50%;flex:none;z-index:1;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--surface);
+  border:2px solid var(--rm-tone,var(--border));color:var(--rm-tone,var(--hint));
+}
+.rm-dot svg{width:16px;height:16px}
+
+/* The bulb. Filled, lit, and breathing — the one stop that is not history. */
+.rm-node.now .rm-dot{
+  background:var(--rm-tone,var(--grape));color:#fff;border-color:transparent;
+  animation:rm-glow 2.1s ease-in-out infinite;
+}
+.rm-node.now .sh-pill{outline:1px solid var(--rm-tone,var(--grape))}
+
+.rm-node .sh-pill{max-width:100%;white-space:normal}
+.rm-date{font-size:10.5px;font-family:var(--mono);color:var(--hint)}
+
+@keyframes rm-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes rm-draw{to{transform:scaleX(1)}}
+@keyframes rm-glow{
+  0%,100%{box-shadow:0 0 0 0 rgba(0,0,0,0)}
+  50%{box-shadow:
+    0 0 0 7px color-mix(in srgb,var(--rm-tone,var(--grape)) 22%,transparent),
+    0 0 16px color-mix(in srgb,var(--rm-tone,var(--grape)) 55%,transparent)}
+}
+@media(prefers-reduced-motion:reduce){
+  .rm-node,.rm-seg{animation:none}
+  .rm-seg{transform:scaleX(1)}
+  .rm-node.now .rm-dot{animation:none;box-shadow:0 0 0 5px color-mix(in srgb,var(--rm-tone,var(--grape)) 20%,transparent)}
+}
+@media(max-width:760px){
+  .rm{padding:var(--s3) var(--s4) var(--s4)}
+  .rm-node{min-width:132px}
+}
+
+/* ---- the calls behind one reason card ----
+   Opens in place under the panels. The brand edge ties it to the card that was
+   clicked, which is the only thing on screen saying where these rows came
+   from. */
+.drill-card{border:1px solid var(--brand);animation:fade .22s ease}
+
+/* ---- the range chip ---- */
+.date-range{
+  display:inline-flex;align-items:center;gap:var(--s2);flex:none;
+  padding:var(--s2) var(--s4);border-radius:999px;
+  background:var(--surface-2);border:1px solid var(--border);
+  font-size:12px;font-weight:700;color:var(--muted);white-space:nowrap;
+}
+.date-range svg{width:14px;height:14px;color:var(--hint)}
+
+/* Stacked below 1180px: side by side, each panel's reasons get too narrow to
+   hold a two-line label without the numbers cramping. */
+@media(max-width:1180px){
+  .stands{grid-template-columns:1fr}
+}
+@media(max-width:560px){
+  .stands-subs{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:760px){
+  .stands{gap:var(--s4)}
+  .stands-panel{padding:var(--s4);gap:var(--s3)}
+  .stands-count{font-size:32px}
+  .donut{width:78px;height:78px}
+  .stands-subs{grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:var(--s2)}
+  .stands-sub-value{font-size:22px}
+}
+
+/* ========================================================== mock banner
+   Loud on purpose. A fixture that looks like live data is how someone acts on
+   a number that was never real. */
+.mock-banner{
+  padding:var(--s3) var(--s5);border-radius:var(--r);
+  background:var(--sun-lt);border:1px solid var(--sun);color:var(--sun-dk);
+  font-size:12.5px;line-height:1.5;
+}
+.mock-banner code{
+  font-family:var(--mono);font-size:11.5px;padding:1px 5px;border-radius:5px;
+  background:rgba(0,0,0,.08);
+}
+.src.mock i{background:var(--sun)}
+
+/* ======================================================== status pill
+   The Status column is read-only. It was a <select> that wrote to _CallLog;
+   changing a shared operational record from a reporting dashboard was the
+   wrong place for it, so the control is gone and the value is simply shown.
+
+   Tinted by the row's SLA state rather than by the status text, so the Status
+   and Outcome columns agree at a glance instead of colouring by two different
+   rules. */
+.pill[class*="status-"]{background:var(--surface-3);color:var(--hint)}
+.pill.status-green,.pill.status-on_time{background:var(--lime-lt);color:var(--lime-dk)}
+.pill.status-amber,.pill.status-delay_complete{background:var(--sun-lt);color:var(--sun-dk)}
+.pill.status-red,.pill.status-delay_pending{background:var(--coral-lt);color:var(--coral-dk)}
+.pill.status-blue,.pill.status-in_window{background:var(--sky-lt);color:var(--sky-dk)}
+.pill.status-violet{background:var(--grape-lt);color:var(--grape-dk)}
+
+/* ================================================== status history */
+.sh-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:var(--s4)}
+.sh-panel{
+  background:var(--surface-2);border:1px solid var(--border-soft);
+  border-radius:var(--r-lg);padding:var(--s4);overflow:hidden;
+}
+.sh-panel-head{
+  display:flex;align-items:center;gap:var(--s3);margin-bottom:var(--s3);
+  padding-bottom:var(--s3);border-bottom:1px solid var(--border-soft);
+}
+.sh-fw{font-weight:700;font-size:13px}
+.sh-attempt{font-size:11px;color:var(--hint);background:var(--surface-3);padding:2px 8px;border-radius:999px}
+.sh-tag{
+  font-size:10px;font-weight:700;padding:2px 7px;border-radius:999px;
+  letter-spacing:.02em;margin-left:auto;
+}
+.sh-tag.reopened{background:var(--coral-lt);color:var(--coral)}
+.sh-empty{font-size:12px;color:var(--hint);padding:var(--s3) 0;text-align:center}
+
+/* Timeline */
+.sh-timeline{display:flex;flex-direction:column;gap:0}
+.sh-entry{display:flex;gap:var(--s3);position:relative}
+.sh-dot-col{
+  display:flex;flex-direction:column;align-items:center;flex:none;width:18px;
+  padding-top:3px;
+}
+.sh-dot{
+  width:10px;height:10px;border-radius:50%;flex:none;
+  border:2px solid var(--border);background:var(--surface);
+  position:relative;z-index:1;
+}
+.sh-dot.on_time,.sh-dot.green{background:var(--lime);border-color:var(--lime)}
+.sh-dot.delay_complete,.sh-dot.amber{background:var(--sun);border-color:var(--sun)}
+.sh-dot.delay_pending,.sh-dot.red{background:var(--coral);border-color:var(--coral)}
+.sh-dot.in_window,.sh-dot.blue{background:var(--sky);border-color:var(--sky)}
+.sh-dot.violet{background:var(--grape);border-color:var(--grape)}
+.sh-line{
+  width:2px;flex:1;min-height:16px;
+  background:var(--border);margin-top:2px;
+}
+.sh-body{flex:1;padding-bottom:var(--s3);min-width:0}
+.sh-head{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap}
+.sh-pill{
+  display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;
+  font-size:10px;font-weight:700;letter-spacing:.02em;white-space:nowrap;
+}
+.sh-pill.on_time,.sh-pill.green{background:var(--lime-lt);color:var(--lime)}
+.sh-pill.delay_complete,.sh-pill.amber{background:var(--sun-lt);color:var(--sun)}
+.sh-pill.delay_pending,.sh-pill.red{background:var(--coral-lt);color:var(--coral)}
+.sh-pill.in_window,.sh-pill.blue{background:var(--sky-lt);color:var(--sky)}
+.sh-pill.violet{background:var(--grape-lt);color:var(--grape)}
+.sh-pill.No-status{background:var(--surface-3);color:var(--muted)}
+.sh-seeded{
+  font-size:9px;font-weight:600;color:var(--hint);
+  background:var(--surface-3);padding:1px 6px;border-radius:999px;
+}
+.sh-date{font-size:11px;color:var(--hint);margin-top:2px;font-family:var(--mono)}
+.sh-entry.sh-current .sh-body{padding-bottom:0}
+
+/* ============================================================== lifecycle */
