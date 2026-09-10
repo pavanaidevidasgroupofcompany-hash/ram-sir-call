@@ -118,6 +118,40 @@ closed were being reported as never closed:
 show the date it was postponed, which claimed a call had ended on the day
 somebody pushed it back.
 
+### The log changes no number
+
+The tracker sheet is the single source of truth for every figure on screen.
+`_CallLog` exists to show *what happened when it was recorded* — the roadmap
+under each row, and the status timeline in the client view. It decides no state,
+no date and no verdict.
+
+That is a testable claim, so it was tested. A parser reading **only** the three
+sheet columns — `Start Date - Fn`, `Fn Status`, `End Date - Fn` — never
+consulting the log at all, was run over the real sheet export and compared
+against the deployed v6 attempt by attempt:
+
+```
+attempts compared : 122
+identical verdict : 122
+different         :   0
+```
+
+The rule holds because of how v6 decides: an End Date closes a call and dates
+it; with no End Date, the Status column and the deadline decide between
+*in window*, *delay pending* and *paused*. The log is only ever consulted where
+the sheet is silent, and on this sheet it never is — **no attempt is marked
+Completed without an End Date**.
+
+Two things are still log-derived, and neither moves a verdict:
+
+| | What it affects | Why |
+|---|---|---|
+| The **Status** pill | text only, on the 9 rows whose End Date is set while the Status still reads *Call pending* | the parser lets the log's last status win the tie |
+| The **Follow-up** column | a second window on postponed / not-received attempts | the sheet has no column dating those actions, so there is no sheet date to use |
+
+Dates shown on the roadmap carry a **LOGGED** prefix whenever they are log
+timestamps, so a recording time is never read as the day a call happened.
+
 ### Days and Late measure to different moments, deliberately
 
 `Days` follows End, so it is the true turnaround. `Late` is the SLA, and the SLA

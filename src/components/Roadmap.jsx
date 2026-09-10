@@ -62,13 +62,15 @@ function stopsOf(row) {
      though it came after the call began, which is the one thing it never
      does. */
   if (row.start) {
-    /* A seeded "Call pending" counts as the same stop. The backfill records
-       that the call WAS pending; the start date records when it went pending.
-       Drawn separately they read as a call that went pending twice, so they
-       are one stop — and it takes the date, which is the better of the two
-       things they know. */
-    const already = out.findIndex((s) => s.label === PENDING
-      && (s.seeded || (s.date && s.date.slice(0, 10) === row.start)));
+    /* A call goes pending ONCE. If the log already carries a Call pending row
+       — on any date — that entry is the stop and no milestone is inserted:
+       the log row is the recording of the very event the start date marks, and
+       drawing both reads as a call that went pending twice. They are commonly
+       days apart, because the status is often typed up later.
+
+       A seeded Call pending is the same event again, and that one takes the
+       start date, since a backfill records the status but never the moment. */
+    const already = out.findIndex((s) => s.label === PENDING);
     if (already >= 0) {
       out[already].milestone = true;
       if (out[already].seeded) { out[already].date = row.start; out[already].seeded = false; }
@@ -80,13 +82,20 @@ function stopsOf(row) {
       });
     }
   }
-  /* The sheet can be ahead of the log — a status typed today whose log row
-     has not been written yet. Then the last stop is the status itself, dated
-     "now", so the lit node is always where the call actually is. */
+  /* The sheet can be ahead of the log — a status the log has no row for. Then
+     the last stop is the status itself, so the lit node is always where the
+     call actually is.
+
+     If that status is Completed and the sheet recorded the day, the stop takes
+     that date. Most closed calls are like this: the End Date column closed them
+     and nobody logged a status change, and dating them "now" would say every
+     one of them finished today. Only a status the sheet cannot date falls back
+     to "now". */
   const cur = normalizeStatus(row.status);
   const last = out[out.length - 1];
   if (cur && (!last || last.label !== cur)) {
-    out.push({ key: "now", label: cur, date: "", live: true,
+    const dated = cur === "Completed" && row.end ? row.end : "";
+    out.push({ key: "now", label: cur, date: dated, live: !dated,
       tone: STATUS_TONE[cur] || "violet", icon: STATUS_ICON[cur] || "list" });
   }
   return out;
@@ -144,13 +153,15 @@ function Roadmap({ row }) {
               {/* A log stop's date is when the status was RECORDED, which is
                   not always the day the call happened — someone completes on
                   Friday and types it in on Monday. Saying "logged" stops the
-                  timestamp being read as the call date. The pending milestone
-                  is exempt: that one comes from the sheet's own start column,
-                  so it IS the day. */}
+                  timestamp being read as the call date.
+
+                  Keyed on the timestamp, not on the stop's role: anything from
+                  the log carries a time and is marked, while a date taken from
+                  the sheet is a plain day and is not. */}
               <span className="rm-date">
                 {s.seeded ? "seeded"
                   : s.live ? "now"
-                  : s.milestone || !s.date.includes("T") ? when(s.date)
+                  : !s.date.includes("T") ? when(s.date)
                   : <><span className="rm-logged">logged</span> {when(s.date)}</>}
               </span>
             </div>
