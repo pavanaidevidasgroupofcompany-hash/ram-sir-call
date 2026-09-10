@@ -751,6 +751,17 @@ body,#root{min-height:100vh}
 
 .rm-node .sh-pill{max-width:100%;white-space:normal}
 .rm-date{font-size:10.5px;font-family:var(--mono);color:var(--hint)}
+/* Quiet, but present: the reader needs to know this is the recording time and
+   not the call time, without it competing with the date itself. */
+.rm-logged{font-family:inherit;font-size:9.5px;letter-spacing:.04em;text-transform:uppercase;opacity:.7}
+/* Same warning in the End column, until the sheet's own date is in the payload.
+   It is deliberately visible rather than a tooltip: a date that is wrong by two
+   days has to say so where it is read, not where it is hovered. */
+.end-logged{
+  font-family:inherit;font-size:9px;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--sun-dk);background:var(--sun-lt);border-radius:4px;
+  padding:1px 4px;margin-left:6px;vertical-align:1px;font-weight:700;
+}
 
 @keyframes rm-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @keyframes rm-draw{to{transform:scaleX(1)}}

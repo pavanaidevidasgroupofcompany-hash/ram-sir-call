@@ -5,15 +5,11 @@ import { STATE_LABEL, SUB_STATES, SUB_FAMILY, SUB_LABEL } from "../config.js";
 /* ============================================================== row model */
 /* The n8n "Parse Framework Calls" node returns objects with these fields:
    business, framework, attempt, advisor, tab, row, startDate, dueDate,
-   calledDate, closedFrom, currentStatus, outcome, verdict, lateHours,
-   lateDays, reopened, seededOnly, history[]
+   calledDate, currentStatus, outcome, verdict, lateHours, lateDays,
+   reopened, seededOnly, history[]
 
    history[] is built from _CallLog: each entry has logId, date, status,
-   seeded. This replaces the old separate "frameworks" array.
-
-   NOTE `calledDate` is the FIRST action, not the completion, and there is no
-   completion date in the payload. `endOf` below derives one from history[];
-   read its note before trusting either date. */
+   seeded. This replaces the old separate "frameworks" array. */
 
 /* The coarse bucket a row falls into, derived from `subVerdict` rather than
    from the legacy `verdict`.
@@ -55,121 +51,141 @@ function stateOf(row) {
   return STATE_OF_VERDICT[row.verdict] || "invalid";
 }
 
-/* ========================================================= WHEN IT ENDED */
-/* The date the call ENDED — which is not a date the parser sends.
+/* WHEN THE CALL ACTUALLY ENDED.
 
-   The parser sends exactly one date for the work itself, `calledDate`, and it
-   is the FIRST ACTION: the first of Completed, "Call postponed by client" and
-   "Call not received". There is no completion date in the payload at all.
+   The parser sends `calledDate`, and that is the FIRST ACTION — the first of
+   Completed / postponed / not-received. For a call finished on the first
+   attempt the two are the same date, which is why this went unnoticed. For a
+   call postponed in July and finished in August they are a month apart, and
+   `calledDate` is the postponement.
 
-   For a call finished at the first attempt those are the same day, which is
-   why this went unnoticed: End read correctly on every one-attempt call and
-   quietly showed the wrong day on the rest. Nova Instruments F4 was postponed
-   on 20-07 and finished on 18-08, and End showed 20-07 — the postponement,
-   labelled as the end of the call.
+   So it cannot be the End column. "End" is when the work finished, and only
+   "Completed" finishes it — the parser says so itself, and it is the whole
+   reason `delay_pending` exists as a state.
 
-   The completion IS in the payload, in `history`, so it is derived from there:
+   The completion is in the log, so it is read from there: the LAST Completed
+   entry, because a call completed, reopened and completed again ended on the
+   second one. A seeded entry is skipped — it records that the status WAS
+   Completed, never when.
 
-     THE LAST non-seeded "Completed" entry. Last rather than first, because a
-     call completed, reopened and completed again ended on the second one.
+   The one case the log cannot answer is a call the sheet closed and nobody
+   logged. The parser marks that `closedFrom: 'grid'` and puts the sheet's end
+   date in `calledDate`, so there it IS the completion date.
 
-     SEEDED ENTRIES ARE SKIPPED. A backfilled log row records that the status
-     *was* Completed; it carries the epoch, not the day the call closed, so
-     reading its date would date every backfilled call to 1970.
+   Nothing here is an SLA calculation. `lateDays` still comes from the parser
+   untouched and is still measured to the first action, which is what the rule
+   judges. */
+function endedOn(r) {
+  /* FIRST CHOICE: the tracker sheet's own "End Date - Fn" column. That is a
+     person writing down the day the call happened, and it is the only date
+     here that means that.
 
-     `closedFrom: "grid"` IS THE EXCEPTION. There the sheet closed the attempt
-     and nobody logged it, so there is no history to read — and `calledDate`
-     genuinely is the completion, because the grid's own end date is the only
-     reason the parser found one.
+     The log cannot answer this question. A _CallLog timestamp is when somebody
+     TYPED the status, and the two are routinely days apart — one live row was
+     completed on the 5th and recorded on the 7th, and every column downstream
+     read two days long because of it. The log can only ever be later, so
+     trusting it marks advisors late for slow data entry rather than slow
+     calling.
 
-   A call answered but never finished returns "", and the table reads "not
-   completed" rather than showing the day it was postponed as if it had ended.
-   That is the second bug this fixes.
+     The v6 parser sends this as `sheetEnd`. The other names are read too, so a
+     rename upstream does not silently drop the column back to the log. Start
+     already comes from the sheet — this is what makes End come from the same
+     place, which was the whole inconsistency. */
+  const sheet = r.sheetEnd || r.endDate || r.gridEnd || r.sheetEndDate || "";
+  if (sheet) return String(sheet).slice(0, 10);
 
-   Status is normalised on the way past, as everywhere else in the dashboard:
-   the log is typed by hand and "completed" is the same event as "Completed". */
-function endOf(r) {
-  const log = r.history || [];
-  for (let i = log.length - 1; i >= 0; i--) {
-    const ev = log[i];
-    if (!ev.seeded && normalizeStatus(ev.status) === "Completed") {
-      return String(ev.date || "").slice(0, 10);
-    }
-  }
-  return r.closedFrom === "grid" ? r.calledDate || "" : "";
+  /* FALLBACK, for a row the sheet has no end date for: the last non-seeded
+     Completed entry in the log. Wrong by however long the update lagged, but it
+     is the only completion date left in the payload, and it is still better
+     than `calledDate`, which on a postponed call is the postponement rather
+     than the close. The table badges these, so a recorded date is never read
+     as a call date. On the current fixture nothing reaches here. */
+  const done = (r.history || []).filter(
+    (h) => !h.seeded && String(h.status || "").trim().toLowerCase() === "completed");
+  if (done.length) return String(done[done.length - 1].date || "").slice(0, 10);
+
+  /* A call the sheet closed that nobody logged: the parser already puts the
+     sheet's date in calledDate for these and marks them closedFrom 'grid'. */
+  if (r.closedFrom === "grid" && r.calledDate) return r.calledDate;
+  return "";
+}
+
+/** True when End came from the sheet rather than from a log timestamp. Lets the
+    table say which dates are the call and which are the paperwork. */
+function endFromSheet(r) {
+  return !!(r.sheetEnd || r.endDate || r.gridEnd || r.sheetEndDate)
+    || (r.closedFrom === "grid" && !!r.calledDate);
 }
 
 function toRows(raw) {
-  return (raw || []).map((r) => {
-    const end = endOf(r);
-    return {
-      tab: r.tab || "",
-      sheetRow: r.row || 0,
-      advisor: r.advisor || "",
-      business: r.business || "",
-      framework: r.framework || "",
-      attempt: r.attempt || "A1",
-      status: r.currentStatus || "",
-      start: r.startDate || "",
-      end,
-      /* The parser's own `calledDate` — the FIRST action, kept under a name that
-         says which date it is. It is what the SLA is judged against, so `Late`
-         below still measures to it while `end` and `duration` no longer do; the
-         Late column names it in a tooltip, because on a postponed-then-finished
-         call the two dates can be a month apart and a Days that disagrees with a
-         Late looks like an error in whichever you trust less. */
-      firstAction: r.calledDate || "",
-      /* "log" | "grid" | "" — where the parser found its date. `endOf` needs it:
-         on a grid close there is no history, and `calledDate` IS the end. */
-      closedFrom: r.closedFrom || "",
-      state: stateOf(r),
-      /* How long the call actually took, start to END, in WORKING days — Sundays
-         excluded, exactly as the parser counts `lateDays`. It is not lateness:
-         `lateDays` below is that, and this is no longer that plus the window —
-         see the note on `firstAction`.
+  return (raw || []).map((r) => ({
+    tab: r.tab || "",
+    sheetRow: r.row || 0,
+    advisor: r.advisor || "",
+    business: r.business || "",
+    framework: r.framework || "",
+    attempt: r.attempt || "A1",
+    status: r.currentStatus || "",
+    start: r.startDate || "",
+    /* When the work finished — not when it was first touched. See endedOn(). */
+    end: endedOn(r),
+    endFromSheet: endFromSheet(r),
+    /* The first action, which is the moment the SLA is judged against. Kept so
+       the Late column can explain itself; it is deliberately not the End. */
+    firstAction: r.calledDate || "",
+    closedFrom: r.closedFrom || "",
+    state: stateOf(r),
+    /* How long the call actually took, start to FINISH, in WORKING days —
+       Sundays excluded, the same kind of day the parser counts `lateDays` in.
+       It is not lateness: `lateDays` below is that.
 
-         The backend sends no duration of its own, only lateHours/lateDays, and
-         this used to read `+r.lateHours`. That put hours-late under a heading
-         reading "Days", so a 65-day call showed 1519.3 beside a Late of 63.3 —
-         the same figure twice, in two units, neither of them the turnaround.
-         Subtracting two dates the backend already sends is not recreating its
-         SLA logic; the verdict and the lateness still come from it untouched. */
-      duration: workingDaysBetween(r.startDate, end),
-      lateDays: +r.lateDays || 0,
-      ym: ymOf(r.startDate),
-      history: r.history || [],
-      reopened: r.reopened || false,
-      seededOnly: r.seededOnly || false,
-      outcome: r.outcome || "",
-      dueDate: r.dueDate || "",
-      /* The parser names its own verdict now — "On time — postponed by client",
-         "Late — call not received" and so on. Prefer that over the coarser
-         five-state label, so a call answered on time but postponed is not shown
-         as a plain "On time" with the reason thrown away. */
-      label: r.label || "",
-      subVerdict: r.subVerdict || "",
-      followUp: r.followUp || null,
-      postponed: !!r.postponed,
-      notReceived: !!r.notReceived,
-      resolved: !!r.resolved,
-      /* on_time | delay | ''  — which side of the deadline, straight from the
-         parser. The empty string is in_window / paused / no_start_date, none of
-         which sit on either side. */
-      family: r.family || SUB_FAMILY[r.subVerdict] || "",
-      /* complete | pending | none — is the work actually finished. */
-      resolution: r.resolution || "",
-      /* complete | postponed | not_received | no_status_change */
-      reason: r.reason || "",
-      clockStart: r.clockStart || "",
-      daysRemaining: +r.daysRemaining || 0,
-      /* Days past whichever deadline currently applies. The parser reports the
-         follow-up clock whenever one is open, which understates a row that also
-         blew its original window — so take the worse of the two. A call 56 days
-         past its first deadline and 6 past its follow-up is 56 days overdue, and
-         sorting "worst first" has to agree. */
-      daysOverdue: Math.max(+r.daysOverdue || 0, +r.lateDays || 0),
-    };
-  });
+       It follows End, so it measures to the completion rather than to the
+       first action. A call started 6 July, postponed on the 20th and finished
+       18 August took 37 working days, not 12 — 12 is how long it took to be
+       picked up, and how long that took against the deadline is exactly what
+       Late already says.
+
+       The backend sends no duration of its own, only lateHours/lateDays, and
+       this used to read `+r.lateHours`. That put hours-late under a heading
+       reading "Days", so a 65-day call showed 1519.3 beside a Late of 63.3 —
+       the same figure twice, in two units, neither of them the turnaround.
+       Subtracting two dates the backend already sends is not recreating its
+       SLA logic; the verdict and the lateness still come from it untouched. */
+    duration: workingDaysBetween(r.startDate, endedOn(r)),
+    lateDays: +r.lateDays || 0,
+    ym: ymOf(r.startDate),
+    history: r.history || [],
+    reopened: r.reopened || false,
+    seededOnly: r.seededOnly || false,
+    outcome: r.outcome || "",
+    dueDate: r.dueDate || "",
+    /* The parser names its own verdict now — "On time — postponed by client",
+       "Late — call not received" and so on. Prefer that over the coarser
+       five-state label, so a call answered on time but postponed is not shown
+       as a plain "On time" with the reason thrown away. */
+    label: r.label || "",
+    subVerdict: r.subVerdict || "",
+    followUp: r.followUp || null,
+    postponed: !!r.postponed,
+    notReceived: !!r.notReceived,
+    resolved: !!r.resolved,
+    /* on_time | delay | ''  — which side of the deadline, straight from the
+       parser. The empty string is in_window / paused / no_start_date, none of
+       which sit on either side. */
+    family: r.family || SUB_FAMILY[r.subVerdict] || "",
+    /* complete | pending | none — is the work actually finished. */
+    resolution: r.resolution || "",
+    /* complete | postponed | not_received | no_status_change */
+    reason: r.reason || "",
+    clockStart: r.clockStart || "",
+    daysRemaining: +r.daysRemaining || 0,
+    /* Days past whichever deadline currently applies. The parser reports the
+       follow-up clock whenever one is open, which understates a row that also
+       blew its original window — so take the worse of the two. A call 56 days
+       past its first deadline and 6 past its follow-up is 56 days overdue, and
+       sorting "worst first" has to agree. */
+    daysOverdue: Math.max(+r.daysOverdue || 0, +r.lateDays || 0),
+  }));
 }
 
 /** The one place call outcomes are counted, so every view agrees. */
@@ -260,21 +276,15 @@ function summarise(rows) {
 }
 
 function csv(rows) {
-  const head = ["Function","Sheet Row","Advisor","Business","Framework","Attempt","Status","Start","First Acted","End","Outcome","Duration (days)","Days Late","Follow-up","Follow-up Due","Follow-up Days Late"];
+  const head = ["Function","Sheet Row","Advisor","Business","Framework","Attempt","Status","Start","End","Outcome","Duration (days)","Days Late","Follow-up","Follow-up Due","Follow-up Days Late"];
   const body = rows.map((r) => {
     /* The second clock travels with the export, or a spreadsheet built from
        this file cannot see the calls that were answered on time and then left
-       unfinished — the ones whose Days Late column reads blank.
-
-       So does First Acted, for the same reason the Late column carries it in a
-       tooltip: Duration runs start → End and Days Late runs start → First
-       Acted, so on a postponed-then-finished call the two answer different
-       questions. Exporting End alone leaves a spreadsheet that cannot tell
-       whether a 37-day call missed its deadline by 37 days or by 11. */
+       unfinished — the ones whose Days Late column reads blank. */
     const f = r.followUp;
     return [
       r.tab, r.sheetRow, r.advisor, r.business, r.framework, r.attempt, r.status,
-      dmy(r.start), dmy(r.firstAction), dmy(r.end), STATE_LABEL[r.state] || r.state, r.duration, r.lateDays,
+      dmy(r.start), dmy(r.end), STATE_LABEL[r.state] || r.state, r.duration, r.lateDays,
       f ? f.verdict : "", f ? dmy(f.dueDate) : "", f ? (f.lateDays || 0) : "",
     ];
   });

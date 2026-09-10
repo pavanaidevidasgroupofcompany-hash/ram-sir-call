@@ -67,58 +67,78 @@ detail view — it just never adds to it.
 
 ## Reading the columns
 
-Two are easy to confuse, so they are worth stating plainly:
+Three are easy to confuse, so they are worth stating plainly:
 
 | Column | Means | From |
 |---|---|---|
-| **End** | the day the call was **completed** | the last `Completed` in `history` |
-| **Days** | how long the call took, start to **End** | computed from the two dates |
-| **Late** | how far past the deadline it ran | the backend's `lateDays` |
+| **End** | the day the work **finished** | the sheet's `End Date - Fn` column |
+| **Days** | how long the call took, start to finish | computed from Start and End |
+| **Late** | how far past the deadline the advisor **first acted** | the backend's `lateDays` |
 
-**Both count working days. Sunday is never counted, by either.**
+**All the day counts are working days. Sunday is never counted.**
 
-### Days and Late measure to different dates
+### End comes from the sheet, not from the log
 
-Deliberately, and this is the one thing to understand about the table.
+The tracker sheet holds three columns per framework — `Start Date - Fn`,
+`Fn Status`, `End Date - Fn` — and **End Date is the day the call happened**. A
+`_CallLog` row is written when somebody *types* a status, and the two are
+routinely days apart: one attempt was completed on the 5th and recorded on the
+7th.
 
-The parser sends a single date for the work, `calledDate`, and it is the
-**first action** — the first of *Completed*, *postponed by client*, *call not
-received*. It sends **no completion date at all**. So `End` is derived in
-[`src/lib/data.js`](src/lib/data.js) from the log: the **last** non-seeded
-`Completed` entry, because a call completed, reopened and completed again ended
-on the second one. Seeded rows are skipped — a backfill records that the status
-*was* Completed, never when. Where the sheet closed an attempt nobody logged
-(`closedFrom: "grid"`) there is no history to read, and `calledDate` genuinely
-is the completion, so that is used.
+The parser used to read only the Start Date column, so `startDate` came from the
+sheet while every closing date came from the log. Mixing those two sources
+inside one measurement was the bug, and because a log timestamp can only ever be
+*later* than the call, the error always ran one way — advisors charged for slow
+data entry rather than slow calling.
 
-`Days` follows `End`: the real turnaround. `Late` does **not** — the SLA judges
-the *first* action, because postponing inside the window is acting in time
-whatever happens afterwards, so it still measures to `calledDate`. Those two
-dates can be a month apart, so the `Late` cell carries a tooltip naming both:
-*First acted 20-07-2026 · due 07-07-2026*. The CSV export carries the same date
-in its own **First Acted** column.
+Since **parser v6** (`parserVersion: "v6-sheet-end-date"`) every row carries:
 
-Nova Instruments F4 is the case that shows it: started 06-07, postponed 20-07,
-finished 18-08. It reads **End 18-08-2026, Days 37, Late 11**.
+| Field | Is |
+|---|---|
+| `calledDate` | the day the call happened — the sheet's date when it has one |
+| `sheetEnd` | the `End Date - Fn` cell, verbatim |
+| `recordedAt` | the log timestamp that used to stand in for it |
+| `closedFrom` | `grid` \| `log` \| `''` — which source closed the row |
 
-`Days` minus `Late` is **1** — the one-day SLA window — for the calls that
-finished at the first action, which is most of them. It is **larger** for a
-call postponed or missed and closed later, by exactly the time between the two
-dates. It is **2** when the call started on a Sunday, because the clock rolls
-forward to Monday before the window opens; the `clockStart` field on every row
-records that. It is **0** when the call was answered on the same day it went
-pending.
+`endedOn()` in `lib/data.js` reads `sheetEnd` first. It still falls back to the
+last non-seeded `Completed` entry in the log if a payload arrives without it, and
+stamps such a date with a small amber **LOGGED** badge — a recording time must
+never be read as a call date. On current live data no row is badged.
 
-A call answered but never finished has no end date and reads **not completed**,
-rather than showing the day it was postponed as though it had ended.
+Deploying v6 moved the numbers a long way, because 95 attempts the sheet had
+closed were being reported as never closed:
+
+| | Before | After |
+|---|---|---|
+| On time | 1 | **19** |
+| Delay pending | 101 | **17** |
+| On-time share | **0.8%** | **15.4%** |
+
+**A call that was answered but not finished reads `not completed`.** It used to
+show the date it was postponed, which claimed a call had ended on the day
+somebody pushed it back.
+
+### Days and Late measure to different moments, deliberately
+
+`Days` follows End, so it is the true turnaround. `Late` is the SLA, and the SLA
+judges the first action — so it keeps measuring to `calledDate`. The Late cell's
+tooltip names both dates (*"First acted 20-07-2026 · due 07-07-2026"*), because
+on a postponed call they are far apart and the number needs to explain itself.
+
+One live row: started 6 July, first acted 20 July, finished 18 August. **Days 37,
+Late 11.** Both correct, measuring different things.
+
+`Days` minus `Late` is **1** — the one-day window — only when the call finished
+on the first action, which is most of them. It is **2** when the call started on
+a Sunday, because the clock rolls forward to Monday first; `clockStart` records
+that. On a postponed call the two are unrelated, and should be.
 
 Counting calendar days here was wrong in a way that showed on screen: two calls
 ran 68 and 69 days and were both 58 working days late, because the longer one
-happened to span one more Sunday. A Days column that moves while Late does not
-reads as a bug in whichever number you trust less. They now read 59 and 59.
+happened to span one more Sunday. They now read 59 and 59.
 
-A call with no end date yet shows `—` in `Days`, and sorts as unknown rather
-than as zero — an unfinished call is not a same-day one.
+A call with no end date shows `—` in `Days`, and sorts as unknown rather than as
+zero — an unfinished call is not a same-day one.
 
 One caveat: the parser also skips public holidays, from a list only it holds.
 It has none configured, so the two agree today. If holidays are added there,

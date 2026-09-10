@@ -141,8 +141,17 @@ function Roadmap({ row }) {
               {gap != null && <span className="rm-gap">{gapLabel(gap)}</span>}
               <span className="rm-dot" aria-hidden="true">{Ico[s.icon]}</span>
               <span className={"sh-pill " + s.tone}>{s.label}</span>
+              {/* A log stop's date is when the status was RECORDED, which is
+                  not always the day the call happened — someone completes on
+                  Friday and types it in on Monday. Saying "logged" stops the
+                  timestamp being read as the call date. The pending milestone
+                  is exempt: that one comes from the sheet's own start column,
+                  so it IS the day. */}
               <span className="rm-date">
-                {s.seeded ? "seeded" : s.live ? "now" : when(s.date)}
+                {s.seeded ? "seeded"
+                  : s.live ? "now"
+                  : s.milestone || !s.date.includes("T") ? when(s.date)
+                  : <><span className="rm-logged">logged</span> {when(s.date)}</>}
               </span>
             </div>
           );

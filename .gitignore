@@ -1,4 +1,12 @@
 node_modules
 dist
+.env
+.env.*
+.DS_Store
+*.local
+
+# a scratch capture of the live payload, and this repo is public
 live.tmp.json
+
+# vercel CLI link metadata
 .vercel

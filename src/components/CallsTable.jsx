@@ -25,6 +25,8 @@ function CallsTable({ rows, isMobile, onClient }) {
     { key: "attempt", label: "Attempt", get: (r) => r.attempt },
     { key: "status", label: "Status", get: (r) => r.status },
     { key: "start", label: "Start", get: (r) => r.start },
+    /* When the work finished. Not the first action — see endedOn() in
+       lib/data.js for why those are different dates. */
     { key: "end", label: "End", get: (r) => r.end },
     /* Null when the call has no end date yet, which must sort as "unknown"
        rather than as zero — an unfinished call is not a same-day one. */
@@ -120,24 +122,29 @@ function CallsTable({ rows, isMobile, onClient }) {
                   </span>
                 </td>
                 <td className="mono">{dmy(r.start)}</td>
+                {/* Normally the sheet's End Date — the day the call happened.
+                    Where the sheet has none, this falls back to the log, which
+                    is when the status was TYPED, and the two are routinely days
+                    apart. Badged so a recording date is never read as a call
+                    date. Nothing on the current data reaches the fallback. */}
                 <td className={r.end ? "mono" : ""}
+                    title={r.end && !r.endFromSheet
+                      ? "From the log — the day the status was recorded, which can be later than the call. This attempt has no End Date in the tracker sheet."
+                      : undefined}
                     style={r.end ? undefined : { color: "var(--hint)", fontSize: 11.5 }}>
                   {r.end ? dmy(r.end) : "not completed"}
+                  {r.end && !r.endFromSheet ? <span className="end-logged">logged</span> : null}
                 </td>
                 <td className="num mono">{r.duration == null ? "—" : r.duration}</td>
                 <td><span className={"pill " + r.state} title={r.label || undefined}>{r.label || STATE_LABEL[r.state] || r.state}</span></td>
-                {/* Days and Late measure to DIFFERENT dates, on purpose. Days
-                    is the real turnaround, start to End. Late is the SLA, and
-                    the SLA judges the FIRST action — postponing inside the
-                    window is acting in time, whatever happens afterwards. On a
-                    call postponed in July and finished in August the two dates
-                    are a month apart, so the cell names both rather than
-                    leaving a 37 beside an 11 looking like one of them is wrong. */}
+                {/* Measured to the FIRST action, which is what the rule
+                    judges — not to the End beside it. The title says so,
+                    because the two dates can be a month apart. */}
                 <td className="num mono"
-                    title={r.firstAction
-                      ? `First acted ${dmy(r.firstAction)} · due ${dmy(r.dueDate)}`
-                      : undefined}
-                    style={{ fontWeight: r.lateDays ? 700 : 400, color: r.lateDays ? "var(--red)" : "var(--hint)" }}>
+                  title={r.firstAction
+                    ? `First acted ${dmy(r.firstAction)}${r.dueDate ? ` · due ${dmy(r.dueDate)}` : ""}`
+                    : undefined}
+                  style={{ fontWeight: r.lateDays ? 700 : 400, color: r.lateDays ? "var(--red)" : "var(--hint)" }}>
                   {r.lateDays ? r.lateDays : "—"}
                 </td>
                 {/* The second clock. A call answered on time and then left
